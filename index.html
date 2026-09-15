@@ -94,7 +94,7 @@
   .slicer-bar{display:flex;align-items:center;gap:22px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin-bottom:20px;}
   .slicer-group{display:flex;align-items:center;gap:9px;}
   .slicer-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);white-space:nowrap;}
-  .slicer-group select{border:1px solid var(--border);border-radius:6px;padding:7px 9px;font-size:12.5px;font-family:inherit;background:#fff;color:var(--ink);}
+  .slicer-group select, .slicer-group input[type=date]{border:1px solid var(--border);border-radius:6px;padding:7px 9px;font-size:12.5px;font-family:inherit;background:#fff;color:var(--ink);}
   .slicer-group select:focus{outline:none;border-color:var(--accent);}
   .slicer-bar .toggle-group{width:auto;}
   .slicer-bar .toggle-btn{padding:7px 12px;white-space:nowrap;}
@@ -195,8 +195,14 @@
   .integration-icon{width:34px;height:34px;border-radius:7px;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-family:var(--serif);font-size:16px;}
   .integration-name{font-size:13.5px;font-weight:700;}
   .integration-desc{font-size:11.5px;color:var(--ink-soft);flex:1;line-height:1.4;}
-  .badge-demo{position:fixed;bottom:16px;right:18px;background:#122820;color:#DCEAE1;font-size:11px;font-weight:600;padding:7px 13px;border-radius:20px;letter-spacing:.02em;box-shadow:0 4px 14px rgba(0,0,0,.18);z-index:40;}
 
+  #auth-gate{position:fixed;inset:0;background:var(--bg);z-index:100;display:flex;align-items:center;justify-content:center;}
+  .auth-box{width:360px;max-width:90vw;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:32px 28px;box-shadow:0 10px 40px rgba(0,0,0,.08);}
+  .auth-brand{font-family:var(--serif);font-size:22px;font-weight:600;text-align:center;color:var(--accent-ink);}
+  .auth-sub{font-size:12.5px;color:var(--ink-faint);text-align:center;margin:4px 0 22px;}
+  .auth-error{background:var(--danger-soft);color:var(--danger);font-size:12px;padding:8px 10px;border-radius:6px;margin-bottom:12px;}
+  .auth-switch{text-align:center;font-size:12px;color:var(--ink-soft);margin-top:14px;}
+  .auth-switch a{color:var(--accent-ink);font-weight:600;text-decoration:none;}
   .section-divider{border:none;border-top:1px solid var(--border);margin:22px 0;}
   .subhead{font-size:13px;font-weight:700;margin:0 0 12px;display:flex;align-items:center;gap:8px;}
   .conn-dot{width:7px;height:7px;border-radius:50%;background:var(--ink-faint);display:inline-block;}
@@ -266,9 +272,57 @@
     .slicer-bar{flex-direction:column;align-items:stretch;}
     .slicer-bar .toggle-group{width:100%;}
   }
+
+  /* Role-based visibility — controls what the UI shows per signed-in role.
+     This is a UI convenience, not a security boundary: see supabase-schema.sql
+     for the RLS policies needed to enforce this at the database level. */
+  body[data-role="staff"] .nav-item[data-view="reports"],
+  body[data-role="staff"] .nav-item[data-view="team"],
+  body[data-role="staff"] .nav-item[data-view="settings"]{display:none;}
+
+  body[data-role="stakeholder"] .nav-item[data-view="customers"],
+  body[data-role="stakeholder"] .nav-item[data-view="pos"],
+  body[data-role="stakeholder"] .nav-item[data-view="team"],
+  body[data-role="stakeholder"] .nav-item[data-view="settings"]{display:none;}
+  body[data-role="stakeholder"] #view-inventory .topbar-actions,
+  body[data-role="stakeholder"] #view-inventory .row-actions,
+  body[data-role="stakeholder"] #view-orders .topbar-actions,
+  body[data-role="stakeholder"] #view-orders .row-actions,
+  body[data-role="stakeholder"] #view-dashboard .topbar-actions{display:none;}
 </style>
 </head>
 <body>
+
+<!-- AUTH GATE (only shown when connected to Supabase and not yet signed in) -->
+<div id="auth-gate" style="display:none;">
+  <div class="auth-box">
+    <div class="auth-brand" id="auth-brand-name">Nitish Tyagi &amp; Co.</div>
+    <div class="auth-sub">Sign in to continue</div>
+
+    <div id="auth-signin-form">
+      <div class="field"><label>Email</label><input id="auth-email" type="email" placeholder="name@company.com"></div>
+      <div class="field"><label>Password</label><input id="auth-password" type="password" placeholder="••••••••"></div>
+      <div id="auth-error" class="auth-error" style="display:none;"></div>
+      <button class="btn" style="width:100%;justify-content:center;" onclick="app.authSignIn()">Sign in</button>
+      <p class="auth-switch">First time? <a href="#" onclick="app.authShowSignUp(event)">Create an account</a></p>
+    </div>
+
+    <div id="auth-signup-form" style="display:none;">
+      <div class="field"><label>Full name</label><input id="auth-signup-name" placeholder="Your name"></div>
+      <div class="field"><label>Email</label><input id="auth-signup-email" type="email" placeholder="name@company.com"></div>
+      <div class="field"><label>Password</label><input id="auth-signup-password" type="password" placeholder="At least 6 characters"></div>
+      <div id="auth-signup-error" class="auth-error" style="display:none;"></div>
+      <button class="btn" style="width:100%;justify-content:center;" onclick="app.authSignUp()">Create account</button>
+      <p class="auth-switch">Already have an account? <a href="#" onclick="app.authShowSignIn(event)">Sign in</a></p>
+    </div>
+
+    <div id="auth-denied" style="display:none;">
+      <p style="font-size:13px;color:var(--ink-soft);">This email isn't on the team list yet, so there's nothing to sign in to. Ask an admin to add you from <strong>Team &amp; Access</strong>, then try again.</p>
+      <button class="btn secondary" style="width:100%;justify-content:center;" onclick="app.authSignOut()">Back to sign in</button>
+    </div>
+  </div>
+</div>
+
 
 <div class="app">
   <!-- SIDEBAR -->
@@ -301,7 +355,15 @@
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3v4"/><path d="M8 3v4"/><path d="M2 11h20"/></svg>
         Point of Sale
       </button>
+      <button class="nav-item" data-view="reports">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+        Reports
+      </button>
       <div class="nav-section-label">SYSTEM</div>
+      <button class="nav-item" data-view="team">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M20 8v4"/><path d="M22 10h-4"/></svg>
+        Team &amp; Access
+      </button>
       <button class="nav-item" data-view="settings">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         Settings
@@ -310,8 +372,8 @@
     <div class="sidebar-foot">
       <div class="avatar">NT</div>
       <div class="who">
-        <div class="who-name">Nitish Tyagi</div>
-        <div class="who-role"><span class="dot" id="conn-dot-side"></span> <span id="conn-label-side">Local data</span></div>
+        <div class="who-name" id="who-name-slot">Nitish Tyagi</div>
+        <div class="who-role" id="who-role-slot"><span class="dot" id="conn-dot-side"></span> <span id="conn-label-side">Local data</span></div>
       </div>
     </div>
   </aside>
@@ -327,7 +389,7 @@
           <p class="page-sub">Overview of sales, stock and customer activity.</p>
         </div>
         <div class="topbar-actions">
-          <button class="btn secondary small" onclick="app.resetData()">Reset demo data</button>
+          <button class="btn secondary small" onclick="app.resetData()">Reset sample data</button>
         </div>
       </div>
 
@@ -543,6 +605,101 @@
       </div>
     </section>
 
+    <!-- REPORTS -->
+    <section class="view" id="view-reports">
+      <div class="topbar">
+        <div>
+          <h1 class="page-title">Reports</h1>
+          <p class="page-sub">Sales, GST, inventory, customer and margin reports — export whenever you need them.</p>
+        </div>
+      </div>
+
+      <div class="slicer-bar">
+        <div class="slicer-group">
+          <span class="slicer-label">Report</span>
+          <div class="toggle-group" id="report-type-toggle">
+            <button type="button" class="toggle-btn active" data-value="sales" onclick="app.setReportType('sales')">Sales</button>
+            <button type="button" class="toggle-btn" data-value="gst" onclick="app.setReportType('gst')">GST</button>
+            <button type="button" class="toggle-btn" data-value="inventory" onclick="app.setReportType('inventory')">Inventory</button>
+            <button type="button" class="toggle-btn" data-value="customers" onclick="app.setReportType('customers')">Customers</button>
+            <button type="button" class="toggle-btn" data-value="profit" onclick="app.setReportType('profit')">Profit &amp; Margin</button>
+          </div>
+        </div>
+        <div class="slicer-group">
+          <span class="slicer-label">Period</span>
+          <div class="toggle-group" id="report-period-toggle">
+            <button type="button" class="toggle-btn active" data-value="thisMonth" onclick="app.setReportPeriod('thisMonth')">This month</button>
+            <button type="button" class="toggle-btn" data-value="thisQuarter" onclick="app.setReportPeriod('thisQuarter')">This quarter</button>
+            <button type="button" class="toggle-btn" data-value="thisYear" onclick="app.setReportPeriod('thisYear')">This year</button>
+            <button type="button" class="toggle-btn" data-value="all" onclick="app.setReportPeriod('all')">All time</button>
+            <button type="button" class="toggle-btn" data-value="custom" onclick="app.setReportPeriod('custom')">Custom</button>
+          </div>
+        </div>
+        <div class="slicer-group" id="report-custom-range" style="display:none;">
+          <input type="date" id="report-custom-start" onchange="app.renderReports()">
+          <span style="color:var(--ink-faint);font-size:12px;">to</span>
+          <input type="date" id="report-custom-end" onchange="app.renderReports()">
+        </div>
+        <div style="position:relative;display:inline-block;margin-left:auto;">
+          <button class="btn secondary small" onclick="app.toggleExportMenu('report-export-menu')">Export ▾</button>
+          <div class="export-menu" id="report-export-menu" style="display:none;position:absolute;right:0;top:36px;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.12);z-index:30;min-width:140px;">
+            <button class="btn secondary small" style="width:100%;border:none;border-radius:0;justify-content:flex-start;" onclick="app.exportReport('csv')">as CSV</button>
+            <button class="btn secondary small" style="width:100%;border:none;border-radius:0;justify-content:flex-start;" onclick="app.exportReport('xlsx')">as Excel</button>
+            <button class="btn secondary small" style="width:100%;border:none;border-radius:0;justify-content:flex-start;" onclick="app.exportReport('pdf')">as PDF</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="kpis" id="report-kpi-row"></div>
+
+      <div class="card-table">
+        <div class="panel-title" id="report-table-title" style="padding-top:14px;">Report</div>
+        <p class="panel-sub" id="report-table-sub"></p>
+        <div style="overflow-x:auto;">
+          <table id="report-table">
+            <thead id="report-table-head"></thead>
+            <tbody id="report-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TEAM & ACCESS -->
+    <section class="view" id="view-team">
+      <div class="topbar">
+        <div>
+          <h1 class="page-title">Team &amp; Access</h1>
+          <p class="page-sub">Give employees and stakeholders their own sign-in, scoped to what they need.</p>
+        </div>
+        <div class="topbar-actions">
+          <button class="btn" onclick="app.openTeamModal()">+ Add team member</button>
+        </div>
+      </div>
+
+      <div class="panel" id="team-auth-status" style="margin-bottom:16px;"></div>
+
+      <div class="card-table">
+        <div class="panel-title" style="padding-top:14px;">People with access</div>
+        <p class="panel-sub">Roles control what each person can see once they sign in.</p>
+        <table>
+          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Access</th><th></th></tr></thead>
+          <tbody id="team-body"></tbody>
+        </table>
+      </div>
+
+      <div class="panel" style="margin-top:16px;">
+        <div class="panel-title" style="margin-bottom:8px;">What each role can see</div>
+        <table>
+          <thead><tr><th>Role</th><th>Dashboard</th><th>Inventory</th><th>Customers</th><th>Orders</th><th>POS</th><th>Reports</th><th>Settings</th></tr></thead>
+          <tbody>
+            <tr><td><span class="pill gold">Admin</span></td><td>✓</td><td>✓ edit</td><td>✓ edit</td><td>✓ edit</td><td>✓</td><td>✓</td><td>✓</td></tr>
+            <tr><td><span class="pill success">Staff</span></td><td>✓</td><td>✓ edit</td><td>✓ edit</td><td>✓ edit</td><td>✓</td><td>—</td><td>—</td></tr>
+            <tr><td><span class="pill muted">Stakeholder</span></td><td>✓</td><td>view only</td><td>—</td><td>view only</td><td>—</td><td>✓</td><td>—</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <!-- SETTINGS -->
     <section class="view" id="view-settings">
       <div class="topbar">
@@ -660,7 +817,7 @@
 
       <div class="panel">
         <div class="panel-title">Data</div>
-        <p class="panel-sub" style="margin-bottom:14px;">Everything here is demo data, stored in your browser. Nothing is sent anywhere unless you connect Supabase above.</p>
+        <p class="panel-sub" style="margin-bottom:14px;">Stored in your browser by default. Nothing is sent anywhere unless you connect Supabase above.</p>
         <div style="display:flex;gap:10px;flex-wrap:wrap;">
           <button class="btn secondary small" onclick="app.exportAllJSON()">Export everything as JSON</button>
           <button class="btn danger small" onclick="app.resetData()">Reset to sample data</button>
@@ -671,7 +828,6 @@
   </main>
 </div>
 
-<div class="badge-demo">Demo data — for portfolio purposes</div>
 
 <!-- PRODUCT MODAL -->
 <div class="overlay" id="product-overlay">
@@ -781,11 +937,33 @@
 </div>
 <div id="invoice-print-area"></div>
 
+<!-- TEAM MEMBER MODAL -->
+<div class="overlay" id="team-overlay">
+  <div class="modal">
+    <h3>Add team member</h3>
+    <p class="modal-sub">They'll sign in with this email — make sure it matches the address they'll use.</p>
+    <div class="field"><label>Full name</label><input id="team-name" placeholder="e.g. Ananya Ghosh"></div>
+    <div class="field"><label>Email</label><input id="team-email" placeholder="name@company.com"></div>
+    <div class="field"><label>Role</label>
+      <select id="team-role">
+        <option value="admin">Admin — full access</option>
+        <option value="staff" selected>Staff — day-to-day operations</option>
+        <option value="stakeholder">Stakeholder — dashboard &amp; reports only</option>
+      </select>
+    </div>
+    <p class="field-hint">Adding someone here grants them access once they sign in with this email — it doesn't send an email invite by itself. Share the site link with them directly.</p>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="app.closeModal('team-overlay')">Cancel</button>
+      <button class="btn" onclick="app.saveTeamMember()">Add member</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /* =========================================================
-   Nitish Tyagi & Co. — portfolio demo (ERP / CRM / POS / dashboard)
+   Nitish Tyagi & Co. — Operations (ERP / CRM / POS / dashboard)
    Vanilla JS. Local-first (localStorage); optional Supabase sync.
-   All data below is fictional and generated for demo purposes.
+   All starter data below can be edited or replaced from Inventory, Customers and Orders.
    ========================================================= */
 
 const SEED = () => ({
@@ -918,10 +1096,11 @@ const SEED = () => ({
     { id: 'ORD-1064', customerId: 'c14', date: '2026-09-08', items:[{pid:'p11',qty:2}], status: 'Pending', supplyType: 'inter' },
     { id: 'ORD-1065', customerId: 'c29', date: '2026-09-10', items:[{pid:'p6',qty:2}], status: 'Pending', supplyType: 'intra' },
     { id: 'ORD-1066', customerId: 'c4', date: '2026-09-12', items:[{pid:'p2',qty:1},{pid:'p9',qty:1}], status: 'Pending', supplyType: 'inter' }
-  ]
+  ],
+  team: []
 });
 
-const DB_KEY = "larkspur_demo_db_v5";
+const DB_KEY = "larkspur_demo_db_v6";
 const TODAY = new Date("2026-09-14");
 
 function loadDB(){
@@ -930,6 +1109,7 @@ function loadDB(){
   try {
     const parsed = JSON.parse(raw);
     parsed.settings = Object.assign(SEED().settings, parsed.settings||{});
+    if(!parsed.team) parsed.team = [];
     return parsed;
   } catch(e){ const seeded = SEED(); localStorage.setItem(DB_KEY, JSON.stringify(seeded)); return seeded; }
 }
@@ -1051,6 +1231,8 @@ function setView(view){
   if(view==="customers") renderCustomers();
   if(view==="orders") renderOrders();
   if(view==="pos") renderPOS();
+  if(view==="reports") renderReports();
+  if(view==="team") renderTeam();
 }
 document.querySelectorAll(".nav-item[data-view]").forEach(btn=>{
   btn.addEventListener("click", ()=> setView(btn.dataset.view));
@@ -1205,6 +1387,195 @@ function goToCustomer(customerId){
   setView("customers");
   document.getElementById("customer-search").value = c.name;
   renderCustomers();
+}
+
+/* =========================================================
+   Reports
+   ========================================================= */
+let reportState = { type: "sales", period: "thisMonth" };
+let lastReportData = null; // {headers, rows} — used by exportReport
+
+function setReportType(type){
+  reportState.type = type;
+  document.querySelectorAll("#report-type-toggle .toggle-btn").forEach(b=> b.classList.toggle("active", b.dataset.value===type));
+  renderReports();
+}
+function setReportPeriod(period){
+  reportState.period = period;
+  document.querySelectorAll("#report-period-toggle .toggle-btn").forEach(b=> b.classList.toggle("active", b.dataset.value===period));
+  document.getElementById("report-custom-range").style.display = period==="custom" ? "flex" : "none";
+  renderReports();
+}
+function reportRange(){
+  const end = TODAY;
+  let start;
+  const p = reportState.period;
+  if(p==="thisMonth") start = new Date(TODAY.getFullYear(), TODAY.getMonth(), 1);
+  else if(p==="thisQuarter") start = new Date(TODAY.getFullYear(), Math.floor(TODAY.getMonth()/3)*3, 1);
+  else if(p==="thisYear") start = new Date(TODAY.getFullYear(), 0, 1);
+  else if(p==="custom"){
+    const s = document.getElementById("report-custom-start").value;
+    const e = document.getElementById("report-custom-end").value;
+    start = s ? new Date(s) : new Date(2000,0,1);
+    return { start, end: e ? new Date(e) : TODAY };
+  }
+  else start = new Date(2000,0,1);
+  return { start, end };
+}
+function reportPeriodLabel(){
+  const map = {thisMonth:"this month", thisQuarter:"this quarter", thisYear:"this year", all:"all time", custom:"selected range"};
+  return map[reportState.period] || "";
+}
+function ordersInReportRange(){
+  const { start, end } = reportRange();
+  return db.orders.filter(o=>{ const d = new Date(o.date); return d>=start && d<=end; });
+}
+
+function kpiCardsHTML(cards){
+  return cards.map(k=>
+    '<div class="kpi"><div class="kpi-label">'+k.label+'</div><div class="kpi-value">'+k.value+'</div>'+(k.sub?'<div class="kpi-delta flat">'+k.sub+'</div>':'')+'</div>'
+  ).join("");
+}
+const REPORT_COUNT_HEADERS = new Set(["Items","Stock","Orders"]);
+function renderReportTable(title, sub, headers, rows){
+  document.getElementById("report-table-title").textContent = title;
+  document.getElementById("report-table-sub").textContent = sub;
+  document.getElementById("report-table-head").innerHTML = "<tr>"+headers.map(h=>'<th class="'+(typeof rows[0]?.[h]==="number"?"num":"")+'">'+h+"</th>").join("")+"</tr>";
+  document.getElementById("report-table-body").innerHTML = rows.length ? rows.map(r=>
+    "<tr>"+headers.map(h=>{
+      const v = r[h];
+      const isNum = typeof v === "number";
+      let display = v;
+      if(isNum){
+        if(h.toLowerCase().includes("%")) display = v+"%";
+        else if(REPORT_COUNT_HEADERS.has(h)) display = v.toLocaleString("en-IN");
+        else display = fmt(v);
+      }
+      return '<td class="'+(isNum?"num":"")+'">'+(v===undefined||v===null?"—":display)+"</td>";
+    }).join("")+"</tr>"
+  ).join("") : '<tr><td colspan="'+headers.length+'"><div class="empty-note">No data in this period.</div></td></tr>';
+  lastReportData = { title, headers, rows };
+}
+
+function renderReports(){
+  const orders = ordersInReportRange();
+  const periodLabel = reportPeriodLabel();
+  if(reportState.type==="sales") renderSalesReport(orders, periodLabel);
+  else if(reportState.type==="gst") renderGSTReport(orders, periodLabel);
+  else if(reportState.type==="inventory") renderInventoryReport();
+  else if(reportState.type==="customers") renderCustomerReport(orders, periodLabel);
+  else if(reportState.type==="profit") renderProfitReport(orders, periodLabel);
+}
+
+function renderSalesReport(orders, periodLabel){
+  const revenue = orders.reduce((s,o)=>s+orderTotal(o),0);
+  const avgOrder = orders.length ? revenue/orders.length : 0;
+  const byStatus = {};
+  orders.forEach(o=> byStatus[o.status] = (byStatus[o.status]||0)+1);
+  document.getElementById("report-kpi-row").innerHTML = kpiCardsHTML([
+    {label:"Revenue ("+periodLabel+")", value: fmt(revenue)},
+    {label:"Orders", value: orders.length},
+    {label:"Average order value", value: fmt(avgOrder)},
+    {label:"Paid / Pending / Shipped", value: (byStatus.Paid||0)+" / "+(byStatus.Pending||0)+" / "+(byStatus.Shipped||0)}
+  ]);
+  const rows = [...orders].sort((a,b)=>a.date.localeCompare(b.date)).map(o=>{
+    const tax = orderTax(o);
+    return { "Order": o.id, "Date": o.date, "Customer": customerById(o.customerId)?.name||"—", "Items": o.items.reduce((s,it)=>s+it.qty,0), "Subtotal": Math.round(tax.subtotal), "Tax": Math.round(tax.totalTax), "Total": Math.round(tax.total), "Status": o.status };
+  });
+  renderReportTable("Sales report", "All orders "+periodLabel+", oldest to newest.", ["Order","Date","Customer","Items","Subtotal","Tax","Total","Status"], rows);
+}
+
+function renderGSTReport(orders, periodLabel){
+  const intra = orders.filter(o=>(o.supplyType||"intra")==="intra");
+  const inter = orders.filter(o=>(o.supplyType||"intra")==="inter");
+  let taxableTotal=0, cgstTotal=0, sgstTotal=0, igstTotal=0;
+  const byRate = {}; // rate -> {taxable, cgst, sgst, igst}
+  orders.forEach(o=>{
+    const tax = orderTax(o);
+    taxableTotal += tax.subtotal; cgstTotal += tax.cgst; sgstTotal += tax.sgst; igstTotal += tax.igst;
+    const isInter = (o.supplyType||"intra")==="inter";
+    o.items.forEach(it=>{
+      const p = productById(it.pid); if(!p) return;
+      const rate = (it.gst!==undefined && it.gst!==null) ? it.gst : productGSTRate(p);
+      const lineTotal = p.price*it.qty;
+      const lineTax = lineTotal*(rate/100);
+      if(!byRate[rate]) byRate[rate] = {taxable:0, cgst:0, sgst:0, igst:0};
+      byRate[rate].taxable += lineTotal;
+      if(isInter) byRate[rate].igst += lineTax; else { byRate[rate].cgst += lineTax/2; byRate[rate].sgst += lineTax/2; }
+    });
+  });
+  document.getElementById("report-kpi-row").innerHTML = kpiCardsHTML([
+    {label:"Total taxable value", value: fmt(taxableTotal)},
+    {label:"CGST + SGST collected", value: fmt(cgstTotal+sgstTotal), sub: intra.length+" intra-state orders"},
+    {label:"IGST collected", value: fmt(igstTotal), sub: inter.length+" inter-state orders"},
+    {label:"Total GST liability", value: fmt(cgstTotal+sgstTotal+igstTotal)}
+  ]);
+  const rows = Object.keys(byRate).map(Number).sort((a,b)=>a-b).map(rate=>{
+    const r = byRate[rate];
+    return { "GST Rate": rate+"%", "Taxable Value": Math.round(r.taxable), "CGST": Math.round(r.cgst), "SGST": Math.round(r.sgst), "IGST": Math.round(r.igst), "Total Tax": Math.round(r.cgst+r.sgst+r.igst) };
+  });
+  renderReportTable("GST report", "Taxable value and tax collected by GST slab, "+periodLabel+" — formatted for GSTR filing reference.", ["GST Rate","Taxable Value","CGST","SGST","IGST","Total Tax"], rows);
+}
+
+function renderInventoryReport(){
+  const totalValue = db.products.reduce((s,p)=>s+p.cost*p.stock,0);
+  const lowStock = db.products.filter(p=>p.stock<=(db.settings.threshold||8));
+  document.getElementById("report-kpi-row").innerHTML = kpiCardsHTML([
+    {label:"Products", value: db.products.length},
+    {label:"Total stock value (at cost)", value: fmt(totalValue)},
+    {label:"Low stock items", value: lowStock.length},
+    {label:"Out of stock", value: db.products.filter(p=>p.stock<=0).length}
+  ]);
+  const rows = [...db.products].sort((a,b)=> (b.cost*b.stock)-(a.cost*a.stock)).map(p=>({
+    "SKU": p.sku, "Product": p.name, "Category": p.category, "Stock": p.stock, "Cost/unit": p.cost, "Stock Value": Math.round(p.cost*p.stock), "Status": stockStatus(p).label
+  }));
+  renderReportTable("Inventory / purchase report", "Current stock valuation at cost price — a snapshot, not filtered by period.", ["SKU","Product","Category","Stock","Cost/unit","Stock Value","Status"], rows);
+}
+
+function renderCustomerReport(orders, periodLabel){
+  const activeCustomerIds = new Set(orders.map(o=>o.customerId));
+  const scored = db.customers.map(c=>({c, s: customerScore(c)}));
+  const topSpender = [...scored].sort((a,b)=>b.s.total-a.s.total)[0];
+  document.getElementById("report-kpi-row").innerHTML = kpiCardsHTML([
+    {label:"Total customers", value: db.customers.length},
+    {label:"Active "+periodLabel, value: activeCustomerIds.size},
+    {label:"Due to reorder", value: db.customers.filter(c=>customerScore(c).reorderDue).length},
+    {label:"Top spender (all-time)", value: topSpender ? topSpender.c.name : "—"}
+  ]);
+  const rows = scored.sort((a,b)=>b.s.score-a.s.score).map(({c,s})=>({
+    "Customer": c.name, "Email": c.email, "Phone": c.phone, "Orders": s.freq, "Total Spent": Math.round(s.total), "Tier": s.tier, "Last Order": s.lastOrderDate||"—"
+  }));
+  renderReportTable("Customer report", "All customers ranked by loyalty score (spend + frequency + recency). \"Active\" counts customers with an order "+periodLabel+".", ["Customer","Email","Phone","Orders","Total Spent","Tier","Last Order"], rows);
+}
+
+function renderProfitReport(orders, periodLabel){
+  let revenue=0, cogs=0;
+  const rows = [...orders].sort((a,b)=>a.date.localeCompare(b.date)).map(o=>{
+    const tax = orderTax(o);
+    let orderCogs = 0;
+    o.items.forEach(it=>{ const p = productById(it.pid); if(p) orderCogs += p.cost*it.qty; });
+    revenue += tax.subtotal; cogs += orderCogs;
+    const grossProfit = tax.subtotal - orderCogs;
+    const margin = tax.subtotal>0 ? Math.round((grossProfit/tax.subtotal)*1000)/10 : 0;
+    return { "Order": o.id, "Date": o.date, "Revenue": Math.round(tax.subtotal), "COGS": Math.round(orderCogs), "Gross Profit": Math.round(grossProfit), "Margin %": margin };
+  });
+  const overallMargin = revenue>0 ? Math.round(((revenue-cogs)/revenue)*1000)/10 : 0;
+  document.getElementById("report-kpi-row").innerHTML = kpiCardsHTML([
+    {label:"Revenue ("+periodLabel+")", value: fmt(revenue)},
+    {label:"Cost of goods sold", value: fmt(cogs)},
+    {label:"Gross profit", value: fmt(revenue-cogs)},
+    {label:"Overall margin", value: overallMargin+"%"}
+  ]);
+  renderReportTable("Profit & margin report", "Revenue vs. cost of goods sold per order (excludes GST), "+periodLabel+".", ["Order","Date","Revenue","COGS","Gross Profit","Margin %"], rows);
+}
+
+function exportReport(type){
+  if(!lastReportData || !lastReportData.rows.length){ alert("No report data to export yet."); return; }
+  const { title, headers, rows } = lastReportData;
+  const filename = title.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/(^-|-$)/g,"");
+  if(type==="csv") downloadBlob(toCSV(rows, headers), filename+".csv", "text/csv");
+  else if(type==="xlsx") exportXLSXRows(rows, headers, filename+".xlsx", title.slice(0,30));
+  else printTable(title+" — "+db.settings.name, headers, rows);
 }
 
 function lineChart(values, labels){
@@ -1472,7 +1843,7 @@ function buildInvoiceHTML(order){
       +taxBreakdownHTML(tax).replace(/class="order-tax-row"/g,'class="invoice-totals-row"')
       +'<div class="invoice-totals-row grand"><span>Total</span><span>'+fmt(tax.total)+'</span></div>'
     +'</div>'
-    +'<div class="invoice-foot">This is a system-generated demo invoice from '+db.settings.name+' · Thank you for your business.</div>';
+    +'<div class="invoice-foot">This is a system-generated invoice from '+db.settings.name+' · Thank you for your business.</div>';
 }
 let currentInvoiceOrderId = null;
 function showInvoice(orderId){
@@ -1871,10 +2242,16 @@ function resetAppearance(){
 /* ---------------- Supabase (optional) ---------------- */
 function updateConnLabel(){
   const on = !!supa;
-  document.getElementById("conn-dot").className = "conn-dot"+(on?" on":"");
-  document.getElementById("conn-label").textContent = on ? "Connected to Supabase" : "Local data only";
-  document.getElementById("conn-dot-side").className = "dot"+(on?" on":"");
-  document.getElementById("conn-label-side").textContent = on ? "Synced" : "Local data";
+  const dotTop = document.getElementById("conn-dot");
+  const labelTop = document.getElementById("conn-label");
+  if(dotTop) dotTop.className = "conn-dot"+(on?" on":"");
+  if(labelTop) labelTop.textContent = on ? "Connected to Supabase" : "Local data only";
+  // Once someone's signed in, applyRoleUI() has replaced who-role-slot's content
+  // (name/role/sign-out) — these side elements no longer exist, so skip them.
+  const dotSide = document.getElementById("conn-dot-side");
+  const labelSide = document.getElementById("conn-label-side");
+  if(dotSide) dotSide.className = "dot"+(on?" on":"");
+  if(labelSide) labelSide.textContent = on ? "Synced" : "Local data";
 }
 function connectSupabase(){
   const url = document.getElementById("set-sb-url").value.trim();
@@ -1885,9 +2262,149 @@ function connectSupabase(){
   try {
     supa = window.supabase.createClient(url, key);
     updateConnLabel();
-    alert("Connected. Use 'Push local data' to upload this demo data, or 'Pull from Supabase' to load from your database.");
+    checkAuthAndRole();
+    alert("Connected. Use 'Push local data' to upload your current data, or 'Pull from Supabase' to load from your database.");
   } catch(e){ alert("Couldn't connect: "+e.message); supa = null; updateConnLabel(); }
 }
+
+/* ---------------- Auth & Team access ---------------- */
+let currentUser = null; // {email, name, role}
+
+function showAuthGate(mode){
+  document.getElementById("auth-brand-name").textContent = db.settings.name;
+  document.getElementById("auth-gate").style.display = "flex";
+  document.getElementById("auth-signin-form").style.display = mode==="signup" ? "none" : "block";
+  document.getElementById("auth-signup-form").style.display = mode==="signup" ? "block" : "none";
+  document.getElementById("auth-denied").style.display = mode==="denied" ? "block" : "none";
+  if(mode==="denied"){ document.getElementById("auth-signin-form").style.display="none"; document.getElementById("auth-signup-form").style.display="none"; }
+}
+function hideAuthGate(){ document.getElementById("auth-gate").style.display = "none"; }
+function authShowSignUp(e){ e.preventDefault(); showAuthGate("signup"); }
+function authShowSignIn(e){ e.preventDefault(); showAuthGate("signin"); }
+
+async function checkAuthAndRole(){
+  if(!supa) return; // no backend to check against — local single-user mode, no gate
+  try{
+    const { data: { session } } = await supa.auth.getSession();
+    if(session && session.user){ await resolveRoleAndEnter(session.user); }
+    else showAuthGate("signin");
+  } catch(e){ showAuthGate("signin"); }
+}
+async function resolveRoleAndEnter(user){
+  const email = user.email;
+  try{
+    const { data: existing, error } = await supa.from("team_members").select("*");
+    if(error) throw error;
+    let mine = existing.find(m=>m.email.toLowerCase()===email.toLowerCase());
+    if(!mine && existing.length===0){
+      // Bootstrap: nobody's on the team list yet — the first person to sign in becomes Admin.
+      const row = { id: "t"+Date.now(), name: email.split("@")[0], email, role: "admin" };
+      await supa.from("team_members").insert(row);
+      mine = row;
+    }
+    if(!mine){ currentUser = null; await supa.auth.signOut(); showAuthGate("denied"); return; }
+    currentUser = { email: mine.email, name: mine.name, role: mine.role };
+    applyRoleUI(currentUser);
+    hideAuthGate();
+    pullFromSupabase(true);
+  } catch(e){
+    // Team check failed (e.g. table missing) — fail open to admin locally so a fresh
+    // Supabase project (before supabase-schema.sql has been run) doesn't lock you out.
+    currentUser = { email, name: email.split("@")[0], role: "admin" };
+    applyRoleUI(currentUser);
+    hideAuthGate();
+  }
+}
+function applyRoleUI(user){
+  document.body.dataset.role = user.role;
+  const who = document.getElementById("who-name-slot");
+  const role = document.getElementById("who-role-slot");
+  if(who) who.textContent = user.name || user.email;
+  if(role) role.innerHTML = '<span class="dot on"></span> '+user.role.charAt(0).toUpperCase()+user.role.slice(1)+' · <a href="#" onclick="app.authSignOut(event)" style="color:inherit;">Sign out</a>';
+  // Land non-admins somewhere they're allowed to see
+  const active = document.querySelector(".nav-item.active");
+  if(active && getComputedStyle(active).display==="none") setView("dashboard");
+}
+async function authSignIn(){
+  const email = document.getElementById("auth-email").value.trim();
+  const password = document.getElementById("auth-password").value;
+  const errEl = document.getElementById("auth-error");
+  errEl.style.display = "none";
+  if(!email || !password){ errEl.textContent = "Enter your email and password."; errEl.style.display="block"; return; }
+  try{
+    const { data, error } = await supa.auth.signInWithPassword({ email, password });
+    if(error) throw error;
+    await resolveRoleAndEnter(data.user);
+  } catch(e){ errEl.textContent = e.message || "Couldn't sign in."; errEl.style.display = "block"; }
+}
+async function authSignUp(){
+  const name = document.getElementById("auth-signup-name").value.trim();
+  const email = document.getElementById("auth-signup-email").value.trim();
+  const password = document.getElementById("auth-signup-password").value;
+  const errEl = document.getElementById("auth-signup-error");
+  errEl.style.display = "none";
+  if(!name || !email || !password){ errEl.textContent = "Fill in your name, email and a password."; errEl.style.display="block"; return; }
+  if(password.length < 6){ errEl.textContent = "Password needs to be at least 6 characters."; errEl.style.display="block"; return; }
+  try{
+    const { data, error } = await supa.auth.signUp({ email, password, options: { data: { name } } });
+    if(error) throw error;
+    if(data.user && !data.session){ errEl.style.display="block"; errEl.className="field-hint"; errEl.textContent = "Account created — check your email to confirm, then sign in."; return; }
+    if(data.user) await resolveRoleAndEnter(data.user);
+  } catch(e){ errEl.textContent = e.message || "Couldn't create account."; errEl.style.display = "block"; }
+}
+async function authSignOut(e){
+  if(e) e.preventDefault();
+  if(supa) await supa.auth.signOut();
+  currentUser = null;
+  document.body.removeAttribute("data-role");
+  showAuthGate("signin");
+}
+
+/* ---------------- Team & Access ---------------- */
+function renderTeam(){
+  const statusEl = document.getElementById("team-auth-status");
+  if(!supa){
+    statusEl.innerHTML = '<div class="panel-title" style="margin-bottom:6px;">Not connected</div><p class="panel-sub">Sign-in and role-based access need a connected Supabase project (Settings → Database connection) — without a backend there\'s no way to actually check who someone is.</p>';
+  } else if(currentUser){
+    statusEl.innerHTML = '<div class="panel-title" style="margin-bottom:6px;">Signed in</div><p class="panel-sub">You\'re signed in as <strong>'+currentUser.email+'</strong> ('+currentUser.role+').</p>';
+  } else {
+    statusEl.innerHTML = '<div class="panel-title" style="margin-bottom:6px;">Connected, not signed in</div><p class="panel-sub">Add people below, then share the site link — they\'ll be asked to sign in.</p>';
+  }
+  document.getElementById("team-body").innerHTML = db.team.map(m=>
+    '<tr><td>'+m.name+'</td><td>'+m.email+'</td><td><span class="pill '+(m.role==="admin"?"gold":m.role==="staff"?"success":"muted")+'">'+m.role+'</span></td>'
+    +'<td>'+(currentUser && currentUser.email.toLowerCase()===m.email.toLowerCase() ? '<span class="pill success">This is you</span>' : '—')+'</td>'
+    +'<td><button class="icon-btn danger-hover" title="Remove access" onclick="app.deleteTeamMember(\''+m.id+'\')">'+ICON_DELETE+'</button></td></tr>'
+  ).join("") || '<tr><td colspan="5"><div class="empty-note">No team members added yet — you have full access by default until you add others.</div></td></tr>';
+}
+function openTeamModal(){
+  document.getElementById("team-name").value = "";
+  document.getElementById("team-email").value = "";
+  document.getElementById("team-role").value = "staff";
+  openModal("team-overlay");
+}
+async function saveTeamMember(){
+  const name = document.getElementById("team-name").value.trim();
+  const email = document.getElementById("team-email").value.trim().toLowerCase();
+  const role = document.getElementById("team-role").value;
+  if(!name || !email){ alert("Enter a name and email."); return; }
+  const row = { id: "t"+Date.now(), name, email, role };
+  db.team.push(row);
+  saveDB();
+  if(supa){
+    try{ await supa.from("team_members").upsert(row); }
+    catch(e){ alert("Saved locally, but couldn't sync to Supabase yet: "+e.message+"\\n\\nMake sure you've run the latest supabase-schema.sql."); }
+  }
+  closeModal("team-overlay");
+  renderTeam();
+}
+async function deleteTeamMember(id){
+  const m = db.team.find(t=>t.id===id);
+  db.team = db.team.filter(t=>t.id!==id);
+  saveDB();
+  if(supa && m){ try{ await supa.from("team_members").delete().eq("email", m.email); }catch(e){} }
+  renderTeam();
+}
+
 async function pushToSupabase(){
   if(!supa){ alert("Connect to Supabase first (Save & connect above)."); return; }
   try{
@@ -1916,7 +2433,7 @@ async function pullFromSupabase(silent){
 
 /* ---------------- Reset / modal helpers ---------------- */
 function resetData(){
-  if(!confirm("Reset all demo data back to the original sample set?")) return;
+  if(!confirm("Reset all data back to the original starter sample set? This cannot be undone.")) return;
   db = SEED();
   saveDB();
   setView(document.querySelector(".nav-item.active").dataset.view);
@@ -1931,12 +2448,15 @@ document.querySelectorAll(".overlay").forEach(ov=>{
 window.app = {
   setView, goToCustomer,
   setDashFilter, resetDashFilters,
+  setReportType, setReportPeriod, exportReport, renderReports,
   openProductModal, saveProduct, deleteProduct, renderInventory, handlePhotoUpload, priceFieldChanged,
   openCustomerModal, saveCustomer, deleteCustomer, renderCustomers,
   openOrderModal, saveOrder, addOrderLine, updateOrderTotal, orderSetSupplyType, orderChangeLineGST, orderCustomerChanged, productGSTRateOf, cycleStatus, deleteOrder, renderOrders, showInvoice, shareInvoice,
   renderPOSProducts, posAddItem, posChangeQty, posChangeLineGST, posSetSupplyType, posPickCustomer, posGuessFromAddress, completeSale,
   exportProducts, exportCustomers, exportOrders, exportAllJSON, toggleExportMenu, handleImport,
   saveSettings, saveAppearance, resetAppearance, connectSupabase, pushToSupabase, pullFromSupabase,
+  openTeamModal, saveTeamMember, deleteTeamMember,
+  authSignIn, authSignUp, authSignOut, authShowSignUp, authShowSignIn,
   resetData, closeModal
 };
 
@@ -1955,7 +2475,7 @@ if(db.settings.sbUrl && db.settings.sbKey && typeof window.supabase !== "undefin
   try{ supa = window.supabase.createClient(db.settings.sbUrl, db.settings.sbKey); }catch(e){ supa=null; }
 }
 updateConnLabel();
-if(supa){ pullFromSupabase(true); } // silent best-effort refresh from the live DB; falls back to local/demo data if it fails
+if(supa){ checkAuthAndRole(); } // shows the sign-in gate, or resolves the session's role and pulls live data
 const initialAppearance = Object.assign({}, SEED().settings.appearance, db.settings.appearance||{});
 document.getElementById("set-font-family").value = initialAppearance.fontFamily;
 document.getElementById("set-font-size").value = initialAppearance.fontSize;
