@@ -105,7 +105,7 @@
   .view.active{display:block;}
 
   /* KPI cards */
-  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px;}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px;}
   .kpi{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:18px 18px 16px;}
   .kpi-clickable{cursor:pointer;transition:border-color .12s, transform .12s;}
   .kpi-clickable:hover{border-color:var(--accent);transform:translateY(-1px);}
@@ -482,7 +482,7 @@
           <span class="page-sub" id="inventory-count"></span>
         </div>
         <table>
-          <thead><tr><th></th><th>SKU</th><th>Product</th><th>Category</th><th class="num">Cost</th><th class="num">Price</th><th class="num">GST</th><th class="num">Stock</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th></th><th>SKU</th><th>Product</th><th>Category</th><th class="num">Cost</th><th class="num">Price</th><th class="num">GST</th><th class="num">Stock</th><th>Status</th><th>Expiry</th><th></th></tr></thead>
           <tbody id="inventory-body"></tbody>
         </table>
       </div>
@@ -815,6 +815,20 @@
         <p class="field-hint" style="margin-top:12px;">Products are matched and updated by SKU — importing the same file twice updates prices/stock rather than duplicating. Column names from Shopify (<code>Variant SKU</code>, <code>Variant Price</code>...) and WooCommerce (<code>SKU</code>, <code>Regular price</code>...) are recognized automatically alongside plain <code>SKU</code>/<code>Price</code>/<code>Stock</code> headers.</p>
       </div>
 
+      <div class="panel" style="margin-bottom:16px;">
+        <div class="panel-title" style="margin-bottom:4px;">Backups</div>
+        <p class="panel-sub">Two backups are kept automatically — the most recent save, and a checkpoint from when this session began, so you can always undo "everything since I opened the app today." No setup needed.</p>
+        <div id="backups-panel-body"><div class="empty-note">Open Settings to load backup status.</div></div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;">
+          <button class="btn secondary small" onclick="app.downloadBackupFile()">Download a backup file</button>
+          <label class="btn secondary small" style="cursor:pointer;margin:0;">
+            Restore from a file
+            <input type="file" accept=".json" style="display:none;" onchange="app.restoreFromFile(this)">
+          </label>
+        </div>
+        <p class="field-hint" style="margin-top:10px;">Downloading gives you an offline copy on this device — save it anywhere you like, including your own Google Drive, by uploading the downloaded file there.</p>
+      </div>
+
       <div class="panel">
         <div class="panel-title">Data</div>
         <p class="panel-sub" style="margin-bottom:14px;">Stored in your browser by default. Nothing is sent anywhere unless you connect Supabase above.</p>
@@ -859,6 +873,8 @@
       <div class="field"><label>GST rate</label><select id="product-gst"></select></div>
     </div>
     <div class="field-hint" style="margin:-8px 0 14px;">Different product categories carry different GST slabs in India (0/5/12/18/28%) — set the rate this item is taxed at. It can still be overridden per sale in POS or Orders.</div>
+    <div class="field"><label>Expiry date (optional)</label><input id="product-expiry" type="date"></div>
+    <div class="field-hint" style="margin:-8px 0 14px;">Leave blank for products that don't expire. Items within 30 days of expiry are flagged in Inventory and on the Dashboard.</div>
     <div class="modal-actions">
       <button class="btn secondary" onclick="app.closeModal('product-overlay')">Cancel</button>
       <button class="btn" onclick="app.saveProduct()">Save product</button>
@@ -1101,7 +1117,8 @@ const SEED = () => ({
 });
 
 const DB_KEY = "larkspur_demo_db_v6";
-const TODAY = new Date("2026-09-14");
+const TODAY = new Date();
+function todayStr(){ return TODAY.toISOString().slice(0,10); }
 
 function loadDB(){
   const raw = localStorage.getItem(DB_KEY);
@@ -1113,7 +1130,10 @@ function loadDB(){
     return parsed;
   } catch(e){ const seeded = SEED(); localStorage.setItem(DB_KEY, JSON.stringify(seeded)); return seeded; }
 }
-function saveDB(){ localStorage.setItem(DB_KEY, JSON.stringify(db)); }
+function saveDB(){
+  localStorage.setItem(DB_KEY, JSON.stringify(db));
+  if(!supa) captureBackup(); // Supabase path captures its own backup after a full refresh (see pullFromSupabase)
+}
 
 let db = loadDB();
 let supa = null;
@@ -1206,6 +1226,13 @@ function stockStatus(p){
   if(p.stock <= (db.settings.threshold||8)) return {label:"Low stock", cls:"warn"};
   return {label:"In stock", cls:"success"};
 }
+function expiryStatus(p){
+  if(!p.expiry) return null;
+  const days = Math.floor((new Date(p.expiry) - TODAY) / 86400000);
+  if(days < 0) return {label:"Expired", cls:"danger", days};
+  if(days <= 30) return {label:"Expiring soon", cls:"warn", days};
+  return {label:"OK", cls:"success", days};
+}
 function orderStatusPill(status){
   const map = {Paid:"success", Shipped:"muted", Pending:"warn", Cancelled:"danger"};
   return '<span class="pill '+(map[status]||'muted')+'">'+status+'</span>';
@@ -1233,6 +1260,7 @@ function setView(view){
   if(view==="pos") renderPOS();
   if(view==="reports") renderReports();
   if(view==="team") renderTeam();
+  if(view==="settings") renderBackupsPanel();
 }
 document.querySelectorAll(".nav-item[data-view]").forEach(btn=>{
   btn.addEventListener("click", ()=> setView(btn.dataset.view));
@@ -1339,6 +1367,7 @@ function renderDashboard(){
   const revPrevious = previous.reduce((s,o)=>s+orderTotal(o),0);
   const revDelta = revPrevious ? Math.round(((revCurrent-revPrevious)/revPrevious)*100) : (revCurrent>0 ? 100 : 0);
   const lowStock = db.products.filter(p=>p.stock<=(db.settings.threshold||8)).length;
+  const expiringSoon = db.products.filter(p=>{ const ex = expiryStatus(p); return ex && ex.label!=="OK"; }).length;
   const periodLabel = PERIOD_LABELS[dashFilter.period];
   const deltaLabel = dashFilter.period==="all" ? "all recorded orders" : (revPrevious ? (revDelta>=0?"+":"")+revDelta+"% vs previous period" : "no prior period to compare");
 
@@ -1346,7 +1375,8 @@ function renderDashboard(){
     {label:"Revenue ("+periodLabel+")", value: fmt(revCurrent), delta: deltaLabel, cls: revDelta>=0?"up":"down", onclick:null},
     {label:"Orders ("+periodLabel+")", value: current.length, delta: dashFilter.period==="all" ? "—" : previous.length+" in previous period", cls:"flat", onclick:"app.setView('orders')"},
     {label:"Customers", value: db.customers.length, delta: db.customers.filter(c=>customerScore(c).reorderDue).length+" due to reorder", cls:"flat", onclick:"app.setView('customers')"},
-    {label:"Low stock items", value: lowStock, delta: lowStock>0 ? "needs reorder" : "all healthy", cls: lowStock>0?"down":"up", onclick:"app.setView('inventory')"}
+    {label:"Low stock items", value: lowStock, delta: lowStock>0 ? "needs reorder" : "all healthy", cls: lowStock>0?"down":"up", onclick:"app.setView('inventory')"},
+    {label:"Expiring / expired", value: expiringSoon, delta: expiringSoon>0 ? "within 30 days or past" : "all clear", cls: expiringSoon>0?"down":"up", onclick:"app.setView('inventory')"}
   ];
   document.getElementById("kpi-row").innerHTML = kpis.map(k=>
     '<div class="kpi'+(k.onclick?' kpi-clickable':'')+'"'+(k.onclick?' onclick="'+k.onclick+'" title="Click to view"':'')+'><div class="kpi-label">'+k.label+'</div><div class="kpi-value">'+k.value+'</div><div class="kpi-delta '+k.cls+'">'+k.delta+'</div></div>'
@@ -1610,10 +1640,12 @@ function renderInventory(){
   document.getElementById("inventory-count").textContent = rows.length + " products";
   document.getElementById("inventory-body").innerHTML = rows.map(p=>{
     const st = stockStatus(p);
+    const ex = expiryStatus(p);
+    const expCell = ex ? '<span class="pill '+ex.cls+'" title="'+(ex.days<0?Math.abs(ex.days)+' days ago':ex.days+' days left')+'">'+p.expiry+(ex.label!=="OK"?' · '+ex.label:'')+'</span>' : '<span style="color:var(--ink-faint);">—</span>';
     const photoCell = p.photo ? '<img class="thumb" src="'+p.photo+'">' : '<div class="thumb-placeholder">'+initials(p.name)+'</div>';
-    return '<tr><td>'+photoCell+'</td><td class="sku">'+p.sku+'</td><td>'+p.name+'</td><td>'+p.category+'</td><td class="num">'+fmt(p.cost)+'</td><td class="num">'+fmt(p.price)+'</td><td class="num">'+productGSTRate(p)+'%</td><td class="num">'+p.stock+'</td><td><span class="pill '+st.cls+'">'+st.label+'</span></td>'
+    return '<tr><td>'+photoCell+'</td><td class="sku">'+p.sku+'</td><td>'+p.name+'</td><td>'+p.category+'</td><td class="num">'+fmt(p.cost)+'</td><td class="num">'+fmt(p.price)+'</td><td class="num">'+productGSTRate(p)+'%</td><td class="num">'+p.stock+'</td><td><span class="pill '+st.cls+'">'+st.label+'</span></td><td>'+expCell+'</td>'
     +'<td><div class="row-actions"><button class="icon-btn" title="Edit product" onclick="app.openProductModal(\''+p.id+'\')">'+ICON_EDIT+' Edit</button><button class="icon-btn danger-hover" title="Delete product" onclick="app.deleteProduct(\''+p.id+'\')">'+ICON_DELETE+'</button></div></td></tr>';
-  }).join("") || '<tr><td colspan="10"><div class="empty-note">No products found.</div></td></tr>';
+  }).join("") || '<tr><td colspan="11"><div class="empty-note">No products found.</div></td></tr>';
 }
 
 function openProductModal(id){
@@ -1627,6 +1659,7 @@ function openProductModal(id){
   document.getElementById("product-price").value = p?p.price:"";
   document.getElementById("product-margin").value = (p && p.cost>0) ? Math.round(((p.price-p.cost)/p.cost)*1000)/10 : "";
   document.getElementById("product-stock").value = p?p.stock:"";
+  document.getElementById("product-expiry").value = p?(p.expiry||""):"";
   document.getElementById("product-gst").innerHTML = gstRateOptionsHTML(p ? productGSTRate(p) : (db.settings.defaultGst!==undefined?db.settings.defaultGst:5));
   document.getElementById("product-photo-input").value = "";
   const preview = document.getElementById("product-photo-preview");
@@ -1665,7 +1698,7 @@ function handlePhotoUpload(input){
   };
   reader.readAsDataURL(file);
 }
-function saveProduct(){
+async function saveProduct(){
   const id = document.getElementById("product-id").value;
   const photoVal = document.getElementById("product-photo-preview").dataset.value || "";
   const data = {
@@ -1676,13 +1709,34 @@ function saveProduct(){
     price: Number(document.getElementById("product-price").value)||0,
     stock: Number(document.getElementById("product-stock").value)||0,
     gst: Number(document.getElementById("product-gst").value),
+    expiry: document.getElementById("product-expiry").value || null,
     photo: photoVal
   };
+  if(supa){
+    try{
+      const row = { id: data.sku, sku: data.sku, name: data.name, category: data.category, cost: data.cost, price: data.price, stock: data.stock, photo: data.photo||null, gst: data.gst, expiry: data.expiry };
+      const { error } = await supa.from("products").upsert(row);
+      if(error) throw error;
+    } catch(e){ alert("Couldn't save this product to the database: "+e.message+"\n\nNothing was changed — please try again."); return; }
+    closeModal("product-overlay");
+    await pullFromSupabase(true);
+    return;
+  }
   if(id){ Object.assign(productById(id), data); }
   else { db.products.push({id:"p"+Date.now(), ...data}); }
   saveDB(); closeModal("product-overlay"); renderInventory(); renderPOSProducts();
 }
-function deleteProduct(id){ db.products = db.products.filter(p=>p.id!==id); saveDB(); renderInventory(); }
+async function deleteProduct(id){
+  if(supa){
+    const p = productById(id); if(!p) return;
+    if(!confirm("Delete "+p.name+"? This can't be undone.")) return;
+    try{ const { error } = await supa.from("products").delete().eq("id", p.sku); if(error) throw error; }
+    catch(e){ alert("Couldn't delete this product: "+e.message); return; }
+    await pullFromSupabase(true);
+    return;
+  }
+  db.products = db.products.filter(p=>p.id!==id); saveDB(); renderInventory();
+}
 
 /* ---------------- Customers ---------------- */
 function renderCustomers(){
@@ -1711,7 +1765,7 @@ function openCustomerModal(id){
   document.getElementById("customer-address").value = c?(c.address||""):"";
   openModal("customer-overlay");
 }
-function saveCustomer(){
+async function saveCustomer(){
   const id = document.getElementById("customer-id").value;
   const name = document.getElementById("customer-name").value.trim();
   if(!name) return;
@@ -1721,11 +1775,32 @@ function saveCustomer(){
     phone: document.getElementById("customer-phone").value.trim() || "—",
     address: document.getElementById("customer-address").value.trim() || ""
   };
+  const finalId = id || ("c"+Date.now());
+  if(supa){
+    try{
+      const row = { id: finalId, name: data.name, email: data.email, phone: data.phone, address: data.address||null };
+      const { error } = await supa.from("customers").upsert(row);
+      if(error) throw error;
+    } catch(e){ alert("Couldn't save this customer to the database: "+e.message+"\n\nNothing was changed — please try again."); return; }
+    closeModal("customer-overlay");
+    await pullFromSupabase(true);
+    return;
+  }
   if(id){ Object.assign(customerById(id), data); }
-  else { db.customers.push({id:"c"+Date.now(), ...data}); }
+  else { db.customers.push({id: finalId, ...data}); }
   saveDB(); closeModal("customer-overlay"); renderCustomers();
 }
-function deleteCustomer(id){ db.customers = db.customers.filter(c=>c.id!==id); saveDB(); renderCustomers(); }
+async function deleteCustomer(id){
+  if(supa){
+    const c = customerById(id); if(!c) return;
+    if(!confirm("Delete "+c.name+"? This can't be undone.")) return;
+    try{ const { error } = await supa.from("customers").delete().eq("id", id); if(error) throw error; }
+    catch(e){ alert("Couldn't delete this customer: "+e.message); return; }
+    await pullFromSupabase(true);
+    return;
+  }
+  db.customers = db.customers.filter(c=>c.id!==id); saveDB(); renderCustomers();
+}
 
 /* ---------------- Orders ---------------- */
 function renderOrders(){
@@ -1738,13 +1813,34 @@ function renderOrders(){
     +'<td><div class="row-actions"><button class="icon-btn" title="View / print GST invoice" onclick="app.showInvoice(\''+o.id+'\')">'+ICON_INVOICE+' Invoice</button><button class="icon-btn" title="Advance status" onclick="app.cycleStatus(\''+o.id+'\')">'+ICON_REFRESH+'</button><button class="icon-btn danger-hover" title="Delete order" onclick="app.deleteOrder(\''+o.id+'\')">'+ICON_DELETE+'</button></div></td></tr>';
   }).join("") || '<tr><td colspan="7"><div class="empty-note">No orders found.</div></td></tr>';
 }
-function cycleStatus(id){
+async function upsertOrderToSupabase(order){
+  const row = { id: order.id, customer_id: order.customerId, date: order.date, items: order.items, status: order.status, supply_type: order.supplyType||"intra" };
+  const { error } = await supa.from("orders").upsert(row);
+  if(error) throw error;
+}
+async function cycleStatus(id){
   const order = db.orders.find(o=>o.id===id);
   const cycle = ["Pending","Paid","Shipped"];
-  order.status = cycle[(cycle.indexOf(order.status)+1)%cycle.length];
+  const nextStatus = cycle[(cycle.indexOf(order.status)+1)%cycle.length];
+  if(supa){
+    try{ await upsertOrderToSupabase({...order, status: nextStatus}); }
+    catch(e){ alert("Couldn't update order status: "+e.message); return; }
+    await pullFromSupabase(true);
+    return;
+  }
+  order.status = nextStatus;
   saveDB(); renderOrders();
 }
-function deleteOrder(id){ db.orders = db.orders.filter(o=>o.id!==id); saveDB(); renderOrders(); }
+async function deleteOrder(id){
+  if(supa){
+    if(!confirm("Delete order "+id+"? This can't be undone.")) return;
+    try{ const { error } = await supa.from("orders").delete().eq("id", id); if(error) throw error; }
+    catch(e){ alert("Couldn't delete this order: "+e.message); return; }
+    await pullFromSupabase(true);
+    return;
+  }
+  db.orders = db.orders.filter(o=>o.id!==id); saveDB(); renderOrders();
+}
 
 let orderLineCount = 0;
 let orderSupplyType = "intra";
@@ -1804,7 +1900,7 @@ function updateOrderTotal(){
   document.getElementById("order-tax-rows").innerHTML = taxBreakdownHTML(tax);
   document.getElementById("order-total-display").textContent = fmt(tax.total);
 }
-function saveOrder(){
+async function saveOrder(){
   const customerId = document.getElementById("order-customer").value;
   const items = [...document.querySelectorAll("#order-lines .order-line")].map(line=>({
     pid: line.querySelector("select").value,
@@ -1813,7 +1909,15 @@ function saveOrder(){
   }));
   if(!items.length) return;
   const nextNum = 1000 + db.orders.length + 43;
-  db.orders.push({ id:"ORD-"+nextNum, customerId, date:"2026-09-14", items, status:"Pending", supplyType: orderSupplyType });
+  const order = { id:"ORD-"+nextNum, customerId, date: todayStr(), items, status:"Pending", supplyType: orderSupplyType };
+  if(supa){
+    try{ await upsertOrderToSupabase(order); }
+    catch(e){ alert("Couldn't save this order to the database: "+e.message+"\n\nNothing was changed — please try again."); return; }
+    closeModal("order-overlay");
+    await pullFromSupabase(true);
+    return;
+  }
+  db.orders.push(order);
   saveDB(); closeModal("order-overlay"); renderOrders();
 }
 
@@ -1968,27 +2072,57 @@ function posPickCustomer(){
   document.getElementById("pos-address").value = c?(c.address||""):"";
   if(c) posSetSupplyType(guessSupplyType(c));
 }
-function completeSale(){
+async function completeSale(){
   if(!posCart.length){ alert("Add at least one item to the cart first."); return; }
   let customerId = document.getElementById("pos-customer-select").value;
   const name = document.getElementById("pos-name").value.trim();
+  const phone = document.getElementById("pos-phone").value.trim();
+  const email = document.getElementById("pos-email").value.trim();
+  const address = document.getElementById("pos-address").value.trim();
+  if(!customerId && !name){ alert("Enter a customer name (or select an existing customer)."); return; }
+
+  if(supa){
+    try{
+      if(!customerId){
+        customerId = "c"+Date.now();
+        await supa.from("customers").upsert({ id: customerId, name, phone: phone||"—", email: email||"—", address: address||null });
+      } else if(phone || email || address){
+        const c = customerById(customerId);
+        const updated = { id: customerId, name: c.name, phone: phone||c.phone, email: email||c.email, address: address||c.address||null };
+        await supa.from("customers").upsert(updated);
+      }
+      // Deduct stock for each product in the cart
+      for(const l of posCart){
+        const p = productById(l.pid); if(!p) continue;
+        const newStock = Math.max(0, p.stock - l.qty);
+        await supa.from("products").update({ stock: newStock }).eq("id", p.sku);
+      }
+      const nextNum = 1000 + db.orders.length + 43;
+      const order = { id:"ORD-"+nextNum, customerId, date: todayStr(), items: posCart.map(l=>({pid:l.pid, qty:l.qty, gst:l.gst})), status:"Paid", supplyType: posSupplyType };
+      await upsertOrderToSupabase(order);
+
+      posCart = []; posSupplyType = "intra";
+      document.getElementById("pos-customer-select").value = "";
+      ["pos-name","pos-phone","pos-email","pos-address"].forEach(id=>document.getElementById(id).value="");
+      document.querySelectorAll("#pos-supply-toggle .toggle-btn").forEach(b=> b.classList.toggle("active", b.dataset.value==="intra"));
+      await pullFromSupabase(true);
+      showInvoice(order.id);
+    } catch(e){
+      alert("The sale couldn't be completed: "+e.message+"\n\nCheck your connection and try again — nothing was charged.");
+      await pullFromSupabase(true);
+    }
+    return;
+  }
+
   if(!customerId){
-    if(!name){ alert("Enter a customer name (or select an existing customer)."); return; }
     customerId = "c"+Date.now();
-    db.customers.push({
-      id: customerId, name,
-      phone: document.getElementById("pos-phone").value.trim() || "—",
-      email: document.getElementById("pos-email").value.trim() || "—",
-      address: document.getElementById("pos-address").value.trim() || ""
-    });
+    db.customers.push({ id: customerId, name, phone: phone||"—", email: email||"—", address: address||"" });
   } else {
     const c = customerById(customerId);
-    c.phone = document.getElementById("pos-phone").value.trim() || c.phone;
-    c.email = document.getElementById("pos-email").value.trim() || c.email;
-    c.address = document.getElementById("pos-address").value.trim() || c.address;
+    c.phone = phone || c.phone; c.email = email || c.email; c.address = address || c.address;
   }
   const nextNum = 1000 + db.orders.length + 43;
-  const order = { id:"ORD-"+nextNum, customerId, date:"2026-09-14", items: posCart.map(l=>({pid:l.pid, qty:l.qty, gst:l.gst})), status:"Paid", supplyType: posSupplyType };
+  const order = { id:"ORD-"+nextNum, customerId, date: todayStr(), items: posCart.map(l=>({pid:l.pid, qty:l.qty, gst:l.gst})), status:"Paid", supplyType: posSupplyType };
   posCart.forEach(l=>{ const p=productById(l.pid); if(p) p.stock = Math.max(0, p.stock - l.qty); });
   db.orders.push(order);
   saveDB();
@@ -2173,7 +2307,7 @@ function applyImport(rows, kind){
         return {pid:p.id, qty:Number(qty)||1, gst: gst!==undefined ? Number(gst) : productGSTRate(p)};
       }).filter(Boolean);
       const supplyType = (pick(r,["SupplyType","Supply Type"])||"intra").toLowerCase()==="inter" ? "inter" : "intra";
-      const data = { id: orderId, customerId: customer?customer.id:null, date: pick(r,["Date"])||"2026-09-14", items, status: pick(r,["Status"])||"Pending", supplyType };
+      const data = { id: orderId, customerId: customer?customer.id:null, date: pick(r,["Date"])||todayStr(), items, status: pick(r,["Status"])||"Pending", supplyType };
       const existing = db.orders.find(o=>o.id===orderId);
       if(existing) Object.assign(existing, data);
       else if(data.customerId && items.length) db.orders.push(data);
@@ -2185,7 +2319,7 @@ function applyImport(rows, kind){
 }
 
 /* ---------------- Settings ---------------- */
-function saveSettings(){
+async function saveSettings(){
   db.settings = Object.assign(db.settings, {
     name: document.getElementById("set-name").value.trim() || "Nitish Tyagi & Co.",
     currency: document.getElementById("set-currency").value,
@@ -2197,6 +2331,11 @@ function saveSettings(){
     companyState: document.getElementById("set-company-state").value.trim() || "Karnataka"
   });
   document.getElementById("brand-name-label").textContent = db.settings.name;
+  if(supa){
+    try{ await pushSettingsToSupabase(); await captureBackup(); } catch(e){ alert("Settings saved on this device, but couldn't sync to the shared database: "+e.message+"\n\n(Only Admins can change shared settings — check your role if this keeps happening.)"); return; }
+    alert("Settings saved for everyone.");
+    return;
+  }
   saveDB();
   alert("Settings saved.");
 }
@@ -2217,7 +2356,7 @@ function applyAppearance(a){
   const zoomMap = {small:"90%", medium:"100%", large:"114%"};
   document.querySelector(".app").style.zoom = zoomMap[a.fontSize] || "100%";
 }
-function saveAppearance(){
+async function saveAppearance(){
   const a = {
     fontFamily: document.getElementById("set-font-family").value,
     fontSize: document.getElementById("set-font-size").value,
@@ -2225,18 +2364,23 @@ function saveAppearance(){
     sidebarColor: document.getElementById("set-sidebar-color").value
   };
   db.settings.appearance = a;
-  saveDB();
   applyAppearance(a);
+  if(supa){
+    try{ await pushSettingsToSupabase(); await captureBackup(); } catch(e){ alert("Couldn't sync appearance to the shared database: "+e.message); return; }
+    return;
+  }
+  saveDB();
 }
-function resetAppearance(){
+async function resetAppearance(){
   const a = SEED().settings.appearance;
   document.getElementById("set-font-family").value = a.fontFamily;
   document.getElementById("set-font-size").value = a.fontSize;
   document.getElementById("set-accent-color").value = a.accentColor;
   document.getElementById("set-sidebar-color").value = a.sidebarColor;
   db.settings.appearance = a;
-  saveDB();
   applyAppearance(a);
+  if(supa){ try{ await pushSettingsToSupabase(); await captureBackup(); } catch(e){} return; }
+  saveDB();
 }
 
 /* ---------------- Supabase (optional) ---------------- */
@@ -2388,47 +2532,183 @@ async function saveTeamMember(){
   const role = document.getElementById("team-role").value;
   if(!name || !email){ alert("Enter a name and email."); return; }
   const row = { id: "t"+Date.now(), name, email, role };
+  if(supa){
+    try{ const { error } = await supa.from("team_members").upsert(row); if(error) throw error; await captureBackup(); }
+    catch(e){ alert("Couldn't save this team member: "+e.message+"\n\nMake sure you've run the latest supabase-schema.sql, and that you're an Admin."); return; }
+    closeModal("team-overlay");
+    await pullFromSupabase(true);
+    renderTeam();
+    return;
+  }
   db.team.push(row);
   saveDB();
-  if(supa){
-    try{ await supa.from("team_members").upsert(row); }
-    catch(e){ alert("Saved locally, but couldn't sync to Supabase yet: "+e.message+"\\n\\nMake sure you've run the latest supabase-schema.sql."); }
-  }
   closeModal("team-overlay");
   renderTeam();
 }
 async function deleteTeamMember(id){
   const m = db.team.find(t=>t.id===id);
+  if(supa && m){
+    if(!confirm("Remove "+m.name+"'s access? This can't be undone.")) return;
+    try{ const { error } = await supa.from("team_members").delete().eq("email", m.email); if(error) throw error; await captureBackup(); }
+    catch(e){ alert("Couldn't remove this team member: "+e.message); return; }
+    await pullFromSupabase(true);
+    renderTeam();
+    return;
+  }
   db.team = db.team.filter(t=>t.id!==id);
   saveDB();
-  if(supa && m){ try{ await supa.from("team_members").delete().eq("email", m.email); }catch(e){} }
   renderTeam();
 }
 
 async function pushToSupabase(){
   if(!supa){ alert("Connect to Supabase first (Save & connect above)."); return; }
   try{
-    await supa.from("products").upsert(db.products.map(p=>({id:p.sku, sku:p.sku, name:p.name, category:p.category, cost:p.cost, price:p.price, stock:p.stock, photo:p.photo||null, gst:productGSTRate(p)})));
+    await supa.from("products").upsert(db.products.map(p=>({id:p.sku, sku:p.sku, name:p.name, category:p.category, cost:p.cost, price:p.price, stock:p.stock, photo:p.photo||null, gst:productGSTRate(p), expiry:p.expiry||null})));
     await supa.from("customers").upsert(db.customers.map(c=>({id:c.id, name:c.name, email:c.email, phone:c.phone, address:c.address||null})));
     await supa.from("orders").upsert(db.orders.map(o=>({id:o.id, customer_id:o.customerId, date:o.date, items:o.items, status:o.status, supply_type:o.supplyType||"intra"})));
-    alert("Pushed products, customers and orders to Supabase.");
+    await pushSettingsToSupabase();
+    alert("Pushed products, customers, orders and settings to Supabase.");
   } catch(e){ alert("Push failed: "+e.message+"\\n\\nCheck that the tables from supabase-schema.sql exist in your project."); }
 }
+async function pushSettingsToSupabase(){
+  if(!supa) return;
+  const { sbUrl, sbKey, ...shareable } = db.settings;
+  const { error } = await supa.from("app_settings").upsert({ id:"main", data: shareable, updated_by: currentUser?currentUser.email:null });
+  if(error) throw error;
+}
+let sessionStartCaptured = false;
 async function pullFromSupabase(silent){
   if(!supa){ if(!silent) alert("Connect to Supabase first (Save & connect above)."); return; }
   try{
-    const [{data:products,error:e1}, {data:customers,error:e2}, {data:orders,error:e3}] = await Promise.all([
-      supa.from("products").select("*"), supa.from("customers").select("*"), supa.from("orders").select("*")
+    const [{data:products,error:e1}, {data:customers,error:e2}, {data:orders,error:e3}, settingsResult, teamResult] = await Promise.all([
+      supa.from("products").select("*"), supa.from("customers").select("*"), supa.from("orders").select("*"), supa.from("app_settings").select("*"), supa.from("team_members").select("*")
     ]);
     if(e1||e2||e3) throw (e1||e2||e3);
-    if(products && products.length) db.products = products.map(p=>({id:p.sku||p.id, sku:p.sku, name:p.name, category:p.category, cost:p.cost, price:p.price, stock:p.stock, photo:p.photo||"", gst: p.gst!==undefined&&p.gst!==null ? p.gst : (db.settings.defaultGst||5)}));
+    if(products && products.length) db.products = products.map(p=>({id:p.sku||p.id, sku:p.sku, name:p.name, category:p.category, cost:p.cost, price:p.price, stock:p.stock, photo:p.photo||"", gst: p.gst!==undefined&&p.gst!==null ? p.gst : (db.settings.defaultGst||5), expiry:p.expiry||null}));
     if(customers && customers.length) db.customers = customers.map(c=>({id:c.id, name:c.name, email:c.email, phone:c.phone, address:c.address||""}));
     if(orders && orders.length) db.orders = orders.map(o=>({id:o.id, customerId:o.customer_id, date:o.date, items:o.items, status:o.status, supplyType:o.supply_type||"intra"}));
+    if(!settingsResult.error && settingsResult.data && settingsResult.data.length){
+      db.settings = Object.assign({}, db.settings, settingsResult.data[0].data, { sbUrl: db.settings.sbUrl, sbKey: db.settings.sbKey });
+    }
+    if(!teamResult.error && teamResult.data) db.team = teamResult.data.map(t=>({id:t.id, name:t.name, email:t.email, role:t.role, permissions:t.permissions||null}));
     saveDB();
     if(document.querySelector(".nav-item.active")) setView(document.querySelector(".nav-item.active").dataset.view);
+    await captureBackup();
     if(!silent) alert("Pulled latest data from Supabase.");
     return true;
   } catch(e){ if(!silent) alert("Pull failed: "+e.message); return false; }
+}
+
+/* ---------------- Backups ---------------- */
+function buildSnapshot(){
+  const { sbUrl, sbKey, ...settingsForBackup } = db.settings;
+  return { takenAt: new Date().toISOString(), products: db.products, customers: db.customers, orders: db.orders, team: db.team, settings: settingsForBackup };
+}
+async function captureBackup(){
+  const snapshot = buildSnapshot();
+  if(supa){
+    try{
+      if(!sessionStartCaptured){
+        await supa.from("backups").upsert({ slot:"session_start", snapshot, created_by: currentUser?currentUser.email:null });
+        sessionStartCaptured = true;
+      }
+      await supa.from("backups").upsert({ slot:"live", snapshot, created_by: currentUser?currentUser.email:null });
+    } catch(e){ console.error("Backup capture failed:", e.message); }
+  } else {
+    if(!sessionStartCaptured){
+      localStorage.setItem("larkspur_backup_session_start", JSON.stringify(snapshot));
+      sessionStartCaptured = true;
+    }
+    localStorage.setItem("larkspur_backup_live", JSON.stringify(snapshot));
+  }
+}
+async function getBackups(){
+  if(supa){
+    try{
+      const { data, error } = await supa.from("backups").select("*");
+      if(error) throw error;
+      const bySlot = {}; (data||[]).forEach(r=> bySlot[r.slot] = r);
+      return bySlot;
+    } catch(e){ return {}; }
+  }
+  const out = {};
+  const live = localStorage.getItem("larkspur_backup_live");
+  const start = localStorage.getItem("larkspur_backup_session_start");
+  if(live) out.live = { snapshot: JSON.parse(live) };
+  if(start) out.session_start = { snapshot: JSON.parse(start) };
+  return out;
+}
+async function restoreFromSnapshot(snapshot){
+  if(supa){
+    async function restoreTable(table, rows){
+      const { data: current } = await supa.from(table).select("id");
+      const keep = new Set(rows.map(r=>r.id));
+      const toDelete = (current||[]).map(r=>r.id).filter(id=>!keep.has(id));
+      if(toDelete.length) await supa.from(table).delete().in("id", toDelete);
+      if(rows.length) await supa.from(table).upsert(rows);
+    }
+    const productRows = snapshot.products.map(p=>({id:p.sku, sku:p.sku, name:p.name, category:p.category, cost:p.cost, price:p.price, stock:p.stock, photo:p.photo||null, gst:productGSTRate(p), expiry:p.expiry||null}));
+    const customerRows = snapshot.customers.map(c=>({id:c.id, name:c.name, email:c.email, phone:c.phone, address:c.address||null}));
+    const orderRows = snapshot.orders.map(o=>({id:o.id, customer_id:o.customerId, date:o.date, items:o.items, status:o.status, supply_type:o.supplyType||"intra"}));
+    await restoreTable("products", productRows);
+    await restoreTable("customers", customerRows);
+    await restoreTable("orders", orderRows);
+    if(snapshot.settings) await supa.from("app_settings").upsert({ id:"main", data: snapshot.settings, updated_by: currentUser?currentUser.email:null });
+    await pullFromSupabase(true);
+  } else {
+    db.products = snapshot.products; db.customers = snapshot.customers; db.orders = snapshot.orders;
+    if(snapshot.team) db.team = snapshot.team;
+    db.settings = Object.assign({}, db.settings, snapshot.settings, { sbUrl: db.settings.sbUrl, sbKey: db.settings.sbKey });
+    saveDB();
+    setView(document.querySelector(".nav-item.active")?.dataset.view || "dashboard");
+  }
+}
+async function restoreBackupSlot(slot){
+  const label = slot==="live" ? "the most recent saved state" : "the state from when this session started";
+  if(!confirm("Restore "+label+"?\n\nThis will REPLACE all current products, customers and orders with the backup's data. Anything saved after that backup was taken will be lost. This can't be undone.")) return;
+  const backups = await getBackups();
+  const entry = backups[slot];
+  if(!entry){ alert("No backup found in that slot yet."); return; }
+  try{ await restoreFromSnapshot(entry.snapshot); alert("Restored."); renderBackupsPanel(); }
+  catch(e){ alert("Restore failed: "+e.message); }
+}
+function downloadBackupFile(){
+  const snapshot = buildSnapshot();
+  downloadBlob(JSON.stringify(snapshot, null, 2), "larkspur-backup-"+todayStr()+".json", "application/json");
+}
+function restoreFromFile(input){
+  const file = input.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    let snapshot;
+    try{ snapshot = JSON.parse(e.target.result); }
+    catch(err){ alert("That doesn't look like a valid backup file."); return; }
+    if(!snapshot.products || !snapshot.customers || !snapshot.orders){ alert("That file doesn't look like a backup from this system."); return; }
+    if(!confirm("Restore from this file (taken "+(snapshot.takenAt||"an unknown time")+")?\n\nThis will REPLACE all current products, customers and orders. This can't be undone.")) return;
+    try{ await restoreFromSnapshot(snapshot); alert("Restored from file."); renderBackupsPanel(); }
+    catch(err){ alert("Restore failed: "+err.message); }
+  };
+  reader.readAsText(file);
+  input.value = "";
+}
+async function renderBackupsPanel(){
+  const el = document.getElementById("backups-panel-body");
+  if(!el) return;
+  el.innerHTML = '<div class="empty-note">Loading backups…</div>';
+  const backups = await getBackups();
+  function fmtWhen(entry){
+    if(!entry) return "No backup yet";
+    const iso = entry.snapshot ? entry.snapshot.takenAt : entry.created_at;
+    return iso ? new Date(iso).toLocaleString() : "Unknown time";
+  }
+  function row(slot, title, desc){
+    const entry = backups[slot];
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-bottom:1px solid var(--border);">'
+      +'<div><div style="font-weight:600;font-size:13.5px;">'+title+'</div><div style="font-size:12px;color:var(--ink-faint);">'+desc+' · '+fmtWhen(entry)+'</div></div>'
+      +'<button class="btn secondary small" '+(entry?'':'disabled')+' onclick="app.restoreBackupSlot(\''+slot+'\')">Restore this</button>'
+      +'</div>';
+  }
+  el.innerHTML = row("live","Most recent save","Updates every time anyone saves a change") + row("session_start","Start of this session","Snapshot from when this session began — undo everything since then");
 }
 
 /* ---------------- Reset / modal helpers ---------------- */
@@ -2455,6 +2735,7 @@ window.app = {
   renderPOSProducts, posAddItem, posChangeQty, posChangeLineGST, posSetSupplyType, posPickCustomer, posGuessFromAddress, completeSale,
   exportProducts, exportCustomers, exportOrders, exportAllJSON, toggleExportMenu, handleImport,
   saveSettings, saveAppearance, resetAppearance, connectSupabase, pushToSupabase, pullFromSupabase,
+  restoreBackupSlot, downloadBackupFile, restoreFromFile,
   openTeamModal, saveTeamMember, deleteTeamMember,
   authSignIn, authSignUp, authSignOut, authShowSignUp, authShowSignIn,
   resetData, closeModal
