@@ -285,7 +285,8 @@
      fixed set of CSS rules can't express arbitrary per-person combinations.
      This is a UI convenience, not a security boundary on its own: see
      supabase-schema.sql for the RLS policies that enforce it at the
-     database level. */
+     database level. */  #connectivity-warning{display:none;position:sticky;top:0;left:0;right:0;z-index:200;background:#7A2E2E;color:#FDEAEA;font-size:13px;padding:10px 20px;align-items:center;justify-content:center;gap:16px;font-weight:600;box-shadow:0 2px 10px rgba(0,0,0,.2);}
+  #connectivity-warning button{background:#FDEAEA;color:#7A2E2E;border:none;border-radius:5px;padding:5px 12px;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit;}
 </style>
 </head>
 <body>
@@ -2463,6 +2464,17 @@ async function resetAppearance(){
 }
 
 /* ---------------- Supabase (optional) ---------------- */
+function showConnectivityWarning(message){
+  let el = document.getElementById("connectivity-warning");
+  if(!el){
+    el = document.createElement("div");
+    el.id = "connectivity-warning";
+    el.innerHTML = '<span id="connectivity-warning-text"></span> <button onclick="location.reload()">Reload page</button>';
+    document.body.prepend(el);
+  }
+  document.getElementById("connectivity-warning-text").textContent = "⚠ " + message;
+  el.style.display = "flex";
+}
 function updateConnLabel(){
   const on = !!supa;
   const dotTop = document.getElementById("conn-dot");
@@ -2511,7 +2523,10 @@ async function checkAuthAndRole(){
     const { data: { session } } = await supa.auth.getSession();
     if(session && session.user){ await resolveRoleAndEnter(session.user); }
     else showAuthGate("signin");
-  } catch(e){ showAuthGate("signin"); }
+  } catch(e){
+    showConnectivityWarning("Couldn't reach the shared database (" + e.message + "). Check your internet connection, then reload.");
+    showAuthGate("signin");
+  }
 }
 async function resolveRoleAndEnter(user){
   const email = user.email;
@@ -2735,6 +2750,14 @@ async function pushSettingsToSupabase(){
   if(error) throw error;
 }
 let sessionStartCaptured = false;
+// One-time data-repair map: the original seed data used ids like "p1"
+// before products were switched to SKU-based ids for Supabase sync (e.g.
+// "LRK-101"). Any order saved before that switch still has the old ids in
+// its line items — this repairs them automatically the first time it's
+// noticed, rather than leaving revenue silently miscalculated forever.
+const LEGACY_PID_MAP = {};
+for(let i=1;i<=20;i++){ LEGACY_PID_MAP["p"+i] = "LRK-"+(100+i); }
+
 async function pullFromSupabase(silent){
   if(!supa){ if(!silent) alert("Connect to Supabase first (Save & connect above)."); return; }
   try{
@@ -2750,11 +2773,32 @@ async function pullFromSupabase(silent){
     }
     if(!teamResult.error && teamResult.data) db.team = teamResult.data.map(t=>({id:t.id, name:t.name, email:t.email, role:t.role, permissions:t.permissions||null}));
     saveDB();
+    await repairLegacyOrderItems();
     if(document.querySelector(".nav-item.active")) setView(document.querySelector(".nav-item.active").dataset.view);
     await captureBackup();
     if(!silent) alert("Pulled latest data from Supabase.");
     return true;
   } catch(e){ if(!silent) alert("Pull failed: "+e.message); return false; }
+}
+async function repairLegacyOrderItems(){
+  const knownProductIds = new Set(db.products.map(p=>p.id));
+  const fixedOrders = [];
+  db.orders.forEach(o=>{
+    let changed = false;
+    const newItems = o.items.map(it=>{
+      if(!knownProductIds.has(it.pid) && LEGACY_PID_MAP[it.pid]){ changed = true; return {...it, pid: LEGACY_PID_MAP[it.pid]}; }
+      return it;
+    });
+    if(changed){ o.items = newItems; fixedOrders.push(o); }
+  });
+  if(!fixedOrders.length) return;
+  if(supa){
+    try{
+      await supa.from("orders").upsert(fixedOrders.map(o=>({id:o.id, customer_id:o.customerId, date:o.date, items:o.items, status:o.status, supply_type:o.supplyType||"intra"})));
+    } catch(e){ console.error("Order repair couldn't be saved back to Supabase:", e.message); return; }
+  }
+  saveDB();
+  alert("Fixed a data issue: "+fixedOrders.length+" order(s) had line items pointing at outdated product records, which was making their totals show as ₹0. They've been corrected and saved — your reports and dashboard should now show the right numbers.");
 }
 
 /* ---------------- Backups ---------------- */
@@ -2910,8 +2954,13 @@ document.getElementById("set-company-phone").value = db.settings.companyPhone||"
 document.getElementById("set-company-state").value = db.settings.companyState||"Karnataka";
 document.getElementById("set-sb-url").value = db.settings.sbUrl||"";
 document.getElementById("set-sb-key").value = db.settings.sbKey||"";
-if(db.settings.sbUrl && db.settings.sbKey && typeof window.supabase !== "undefined"){
-  try{ supa = window.supabase.createClient(db.settings.sbUrl, db.settings.sbKey); }catch(e){ supa=null; }
+if(db.settings.sbUrl && db.settings.sbKey){
+  if(typeof window.supabase !== "undefined"){
+    try{ supa = window.supabase.createClient(db.settings.sbUrl, db.settings.sbKey); }
+    catch(e){ supa=null; showConnectivityWarning("Couldn't connect to the shared database ("+e.message+")."); }
+  } else {
+    showConnectivityWarning("The database connection library couldn't load — often caused by an ad blocker, privacy extension, or restrictive network/firewall blocking it. You're seeing local-only demo data on this device, not your team's real data.");
+  }
 }
 updateConnLabel();
 if(supa){ checkAuthAndRole(); } // shows the sign-in gate, or resolves the session's role and pulls live data
