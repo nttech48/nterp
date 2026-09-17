@@ -39,6 +39,9 @@
   }
   *{box-sizing:border-box;}
   body{margin:0;font-family:var(--sans);background:var(--bg);color:var(--ink);}
+  body[data-bg-pattern="dots"] .main{background-image:radial-gradient(var(--border) 1px, transparent 1px);background-size:18px 18px;}
+  body[data-bg-pattern="grid"] .main{background-image:linear-gradient(var(--border) 1px, transparent 1px),linear-gradient(90deg, var(--border) 1px, transparent 1px);background-size:28px 28px;}
+  body[data-bg-pattern="lines"] .main{background-image:repeating-linear-gradient(135deg, var(--border) 0, var(--border) 1px, transparent 1px, transparent 16px);}
   ::selection{background:var(--accent-soft);}
   a{color:inherit;}
   button{font-family:inherit;cursor:pointer;}
@@ -69,7 +72,7 @@
   .dot.on{background:#5FD394;}
 
   /* ---------- Main ---------- */
-  .main{padding:30px 38px 60px;max-width:1280px;}
+  .main{padding:30px 38px 60px;max-width:1280px;min-width:0;}
   .topbar{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:26px;gap:20px;flex-wrap:wrap;}
   .page-title{font-family:var(--serif);font-size:26px;font-weight:600;margin:0 0 4px;}
   .page-sub{color:var(--ink-soft);font-size:13.5px;margin:0;}
@@ -106,6 +109,26 @@
 
   /* KPI cards */
   .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px;}
+  .insights-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:24px;}
+  .insight-card{border-radius:9px;padding:18px 20px;border:1px solid transparent;}
+  .insight-card .insight-tag{display:inline-block;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:3px 9px;border-radius:20px;margin-bottom:10px;}
+  .insight-card .insight-headline{font-family:var(--serif);font-size:16.5px;font-weight:600;line-height:1.3;margin-bottom:6px;}
+  .insight-card .insight-body{font-size:12.5px;line-height:1.5;color:var(--ink-soft);}
+  .insight-card .insight-action{font-size:12px;font-weight:600;margin-top:10px;display:flex;gap:6px;align-items:center;}
+  .insight-card.performance{background:var(--accent-soft);border-color:color-mix(in srgb, var(--accent) 30%, transparent);}
+  .insight-card.performance .insight-tag{background:var(--accent);color:#fff;}
+  .insight-card.performance .insight-action{color:var(--accent-ink);}
+  .insight-card.risk{background:#FBEAEA;border-color:#EBC6C6;}
+  .insight-card.risk .insight-tag{background:#A23B3B;color:#fff;}
+  .insight-card.risk .insight-action{color:#A23B3B;}
+  .insight-card.opportunity{background:var(--gold-soft, #F5EAD6);border-color:#E4CFA0;}
+  .insight-card.opportunity .insight-tag{background:var(--gold);color:#3A2A0F;}
+  .insight-card.opportunity .insight-action{color:#8A611E;}
+  .state-row{display:flex;align-items:center;gap:10px;padding:7px 0;}
+  .state-row .state-name{width:110px;flex:none;font-size:12px;font-weight:600;color:var(--ink);}
+  .state-row .state-bar-track{flex:1;background:var(--accent-soft);border-radius:4px;height:16px;overflow:hidden;}
+  .state-row .state-bar-fill{height:100%;background:var(--accent);border-radius:4px;}
+  .state-row .state-count{width:56px;flex:none;text-align:right;font-size:12px;color:var(--ink-faint);}
   .kpi{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:18px 18px 16px;}
   .kpi-clickable{cursor:pointer;transition:border-color .12s, transform .12s;}
   .kpi-clickable:hover{border-color:var(--accent);transform:translateY(-1px);}
@@ -119,7 +142,7 @@
   .kpi-delta.flat{color:var(--ink-faint);}
 
   .grid-2{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;margin-bottom:24px;align-items:stretch;}
-  .panel{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:20px 22px;}
+  .panel{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:20px 22px;min-width:0;}
   .panel-title{font-size:14px;font-weight:700;margin:0 0 2px;}
   .panel-sub{font-size:12px;color:var(--ink-faint);margin:0 0 14px;}
 
@@ -188,7 +211,9 @@
   .order-tax-row{display:flex;justify-content:space-between;font-size:12.5px;color:var(--ink-soft);padding:2px 0;font-family:var(--mono);}
 
   /* svg chart helpers */
-  .chart-wrap svg{overflow:visible;}
+  .chart-wrap svg{overflow:visible;max-width:100%;}
+  .chart-wrap{min-width:0;}
+  .grid-2 > *{min-width:0;}
   .axis-label{font-size:10px;fill:var(--ink-faint);font-family:var(--sans);}
   .bar-label{font-size:11px;fill:var(--ink-soft);font-family:var(--sans);}
   .bar-value{font-size:11px;fill:var(--ink);font-family:var(--mono);font-weight:600;}
@@ -271,12 +296,14 @@
     .main{padding:22px 18px 60px;}
     .grid-2{grid-template-columns:1fr;}
     .kpis{grid-template-columns:1fr 1fr;}
+    .insights-row{grid-template-columns:1fr;}
     .pos-grid{grid-template-columns:1fr;}
     .pos-cart{position:static;}
     .integration-grid{grid-template-columns:1fr;}
     .settings-grid{grid-template-columns:1fr;}
     .slicer-bar{flex-direction:column;align-items:stretch;}
     .slicer-bar .toggle-group{width:100%;}
+    .slicer-bar .toggle-btn{white-space:normal;min-width:0;font-size:10.5px;padding:7px 4px;}
   }
 
   /* Role-based visibility now lives in JS (see applyPermissions()) — each
@@ -327,7 +354,7 @@
   <!-- SIDEBAR -->
   <aside class="sidebar">
     <div class="brand">
-      <div class="brand-mark" id="brand-mark">N</div>
+      <div class="brand-mark" id="brand-mark" data-fallback="N">N</div>
       <div>
         <div class="brand-name" id="brand-name-label">Nitish Tyagi & Co.</div>
         <div class="brand-sub">OPERATIONS</div>
@@ -387,9 +414,6 @@
           <h1 class="page-title">Dashboard</h1>
           <p class="page-sub">Overview of sales, stock and customer activity.</p>
         </div>
-        <div class="topbar-actions">
-          <button class="btn secondary small" onclick="app.resetData()">Reset sample data</button>
-        </div>
       </div>
 
       <div class="slicer-bar">
@@ -425,6 +449,8 @@
 
       <div class="kpis" id="kpi-row"></div>
 
+      <div class="insights-row" id="insights-row"></div>
+
       <div class="grid-2">
         <div class="panel">
           <div class="panel-title">Revenue — last 12 months</div>
@@ -433,8 +459,21 @@
         </div>
         <div class="panel">
           <div class="panel-title">Top products</div>
-          <p class="panel-sub" id="top-products-sub">By revenue in selected period</p>
+          <p class="panel-sub" id="top-products-sub">Revenue trend, top performers in the selected period</p>
           <div class="chart-wrap" id="chart-products"></div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-title">Revenue by category</div>
+          <p class="panel-sub" id="category-pie-sub">Share of revenue in the selected period</p>
+          <div class="chart-wrap" id="chart-category-pie"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">Orders by state</div>
+          <p class="panel-sub">Where your customers are, ranked by order volume</p>
+          <div id="orders-by-state"></div>
         </div>
       </div>
 
@@ -711,6 +750,17 @@
 
       <div class="panel" style="margin-bottom:16px;">
         <div class="panel-title" style="margin-bottom:14px;">Store profile</div>
+        <div class="field" style="margin-bottom:16px;">
+          <label>Company logo</label>
+          <div style="display:flex;align-items:center;gap:14px;">
+            <img id="set-logo-preview" style="width:52px;height:52px;border-radius:8px;object-fit:cover;border:1px solid var(--border);display:none;">
+            <div id="set-logo-placeholder" style="width:52px;height:52px;border-radius:8px;background:var(--accent-soft);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--ink-faint);text-align:center;">No logo</div>
+            <div>
+              <input type="file" id="set-logo-input" accept="image/*" onchange="app.handleLogoUpload(this)">
+              <div class="field-hint" style="margin-top:4px;">Shown in the sidebar and on invoices. Square images work best.</div>
+            </div>
+          </div>
+        </div>
         <div class="settings-grid">
           <div class="field"><label>Business name</label><input id="set-name" value="Nitish Tyagi & Co."></div>
           <div class="field"><label>Currency</label>
@@ -748,6 +798,17 @@
           </div>
           <div class="field"><label>Sidebar color</label>
             <input id="set-sidebar-color" type="color" value="#122820" style="height:40px;padding:4px;">
+          </div>
+          <div class="field"><label>Secondary color</label>
+            <input id="set-secondary-color" type="color" value="#c08a3e" style="height:40px;padding:4px;">
+          </div>
+          <div class="field"><label>Background pattern</label>
+            <select id="set-bg-pattern">
+              <option value="none">None (default)</option>
+              <option value="dots">Dot grid</option>
+              <option value="lines">Diagonal lines</option>
+              <option value="grid">Grid</option>
+            </select>
           </div>
         </div>
         <div style="display:flex;gap:10px;">
@@ -840,8 +901,9 @@
         <p class="panel-sub" style="margin-bottom:14px;">Stored in your browser by default. Nothing is sent anywhere unless you connect Supabase above.</p>
         <div style="display:flex;gap:10px;flex-wrap:wrap;">
           <button class="btn secondary small" onclick="app.exportAllJSON()">Export everything as JSON</button>
-          <button class="btn danger small" onclick="app.resetData()">Reset to sample data</button>
+          <button class="btn danger small" onclick="app.clearAllData()">Clear all data</button>
         </div>
+        <p class="field-hint" style="margin-top:10px;">For starting fresh with your own company's data — permanently deletes every product, customer and order (yours, not sample content). Take a backup first if you're not sure.</p>
       </div>
     </section>
 
@@ -1002,7 +1064,7 @@ const SEED = () => ({
     companyState: "Karnataka",
     companyGST: "29ABCDE1234F1Z5", companyPhone: "+91 98450 11223",
     sbUrl: "https://vfwpucvkwgrwilrwchom.supabase.co", sbKey: "sb_publishable_PWZjZ20Cdg8d2bEv-ZFVnA_OUQFFbCe",
-    appearance: { fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: "medium", accentColor: "#1f6f5c", sidebarColor: "#122820" }
+    appearance: { fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: "medium", accentColor: "#1f6f5c", sidebarColor: "#122820", secondaryColor: "#c08a3e", bgPattern: "none" }
   },
   products: [
     { id: "p1", sku: "LRK-101", name: "Ceramic Table Vase",       category: "Ceramics", cost: 420,  price: 899,  stock: 24, photo: "", gst: 12 },
@@ -1277,6 +1339,31 @@ function guessSupplyType(customer){
   const hints = STATE_CITY_HINTS[state] || [];
   return hints.some(h => addr.includes(h)) ? "intra" : "inter";
 }
+function guessStateForAddress(address){
+  if(!address) return "Unknown";
+  const addr = address.toLowerCase();
+  for(const state in STATE_CITY_HINTS){
+    if(addr.includes(state) || STATE_CITY_HINTS[state].some(h=>addr.includes(h))){
+      return state.replace(/\b\w/g, c=>c.toUpperCase());
+    }
+  }
+  return "Other";
+}
+function renderOrdersByState(orders){
+  const el = document.getElementById("orders-by-state");
+  if(!orders.length){ el.innerHTML = '<div class="empty-note">No orders match the current filters.</div>'; return; }
+  const counts = {};
+  orders.forEach(o=>{
+    const c = customerById(o.customerId);
+    const state = guessStateForAddress(c ? c.address : null);
+    counts[state] = (counts[state]||0)+1;
+  });
+  const ranked = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,7);
+  const max = Math.max(...ranked.map(r=>r[1]), 1);
+  el.innerHTML = ranked.map(([state,count])=>
+    '<div class="state-row"><span class="state-name">'+state+'</span><div class="state-bar-track"><div class="state-bar-fill" style="width:'+Math.round((count/max)*100)+'%;"></div></div><span class="state-count">'+count+' order'+(count===1?"":"s")+'</span></div>'
+  ).join("");
+}
 function gstRateOptionsHTML(selected){
   return GST_RATES.map(r=>'<option value="'+r+'"'+(Number(selected)===r?' selected':'')+'>'+r+'%</option>').join("");
 }
@@ -1426,6 +1513,58 @@ function resetDashFilters(){
   renderDashboard();
 }
 
+function generateInsights(current, previous, revCurrent, revDelta, periodLabel){
+  const cards = [];
+  const hasPriorPeriod = dashFilter.period !== "all";
+  // Performance
+  const topCatEntry = (()=>{
+    const byCat = {};
+    current.forEach(o=>o.items.forEach(it=>{ const p=productById(it.pid); if(!p) return; byCat[p.category]=(byCat[p.category]||0)+p.price*it.qty; }));
+    const sorted = Object.entries(byCat).sort((a,b)=>b[1]-a[1]);
+    return sorted[0];
+  })();
+  if((hasPriorPeriod && revDelta !== 0) || current.length){
+    const dirWord = revDelta>=0 ? "up" : "down";
+    cards.push({
+      type:"performance", tag:"Performance",
+      headline: hasPriorPeriod ? "Revenue is "+dirWord+" "+Math.abs(revDelta)+"% "+periodLabel : "Revenue "+periodLabel+": "+fmt(revCurrent),
+      body: topCatEntry ? "Driven mainly by "+topCatEntry[0]+" ("+fmt(topCatEntry[1])+" of revenue this period)." : "Not enough order history yet to identify what's driving it.",
+      action: (hasPriorPeriod && revDelta<0) ? "Review pricing or promotion for your top category before next period." : "Consider restocking your top category ahead of demand."
+    });
+  }
+  // Risk — combine low stock + near-expiry into one ₹ figure at stake
+  const lowStockItems = db.products.filter(p=>p.stock<=(db.settings.threshold||8));
+  const expiringItems = db.products.filter(p=>{ const ex=expiryStatus(p); return ex && ex.label!=="OK"; });
+  const expiringCost = expiringItems.reduce((s,p)=>s+p.cost*p.stock,0);
+  if(lowStockItems.length || expiringItems.length){
+    const parts = [];
+    if(lowStockItems.length) parts.push(lowStockItems.length+" item(s) low on stock");
+    if(expiringItems.length) parts.push(expiringItems.length+" item(s) expiring or expired ("+fmt(expiringCost)+" tied up)");
+    cards.push({
+      type:"risk", tag:"Risk",
+      headline: parts.join(" · "),
+      body: expiringItems.length ? "Expiring stock loses value the longer it sits — and low stock risks turning away a sale." : "Running low could mean turning away a sale on your next order.",
+      action: expiringItems.length ? "Discount or bundle near-expiry stock now, and reorder what's running low." : "Reorder these before the next busy period."
+    });
+  }
+  // Opportunity — best-performing product or a high-margin category
+  const topProductsForOpp = (()=>{
+    const byProd = {};
+    current.forEach(o=>o.items.forEach(it=>{ const p=productById(it.pid); if(!p) return; byProd[p.id]=(byProd[p.id]||0)+p.price*it.qty; }));
+    const sorted = Object.entries(byProd).sort((a,b)=>b[1]-a[1]);
+    return sorted[0] ? productById(sorted[0][0]) : null;
+  })();
+  if(topProductsForOpp){
+    const margin = topProductsForOpp.cost>0 ? Math.round(((topProductsForOpp.price-topProductsForOpp.cost)/topProductsForOpp.price)*100) : null;
+    cards.push({
+      type:"opportunity", tag:"Opportunity",
+      headline: topProductsForOpp.name+" is your top seller "+periodLabel,
+      body: margin!==null ? "Running at roughly "+margin+"% margin — comfortably above cost." : "Strong revenue contributor this period.",
+      action: "Feature it in POS or restock ahead of the next order cycle to keep the momentum."
+    });
+  }
+  return cards;
+}
 function renderDashboard(){
   const monthKey = (d)=> d.slice(0,7);
   const monthRange = last12Months();
@@ -1439,20 +1578,30 @@ function renderDashboard(){
   const revPrevious = previous.reduce((s,o)=>s+orderTotal(o),0);
   const revDelta = revPrevious ? Math.round(((revCurrent-revPrevious)/revPrevious)*100) : (revCurrent>0 ? 100 : 0);
   const lowStock = db.products.filter(p=>p.stock<=(db.settings.threshold||8)).length;
-  const expiringSoon = db.products.filter(p=>{ const ex = expiryStatus(p); return ex && ex.label!=="OK"; }).length;
+  const expiringItems = db.products.filter(p=>{ const ex = expiryStatus(p); return ex && ex.label!=="OK"; });
+  const expiringCost = expiringItems.reduce((s,p)=>s+p.cost*p.stock,0);
   const periodLabel = PERIOD_LABELS[dashFilter.period];
   const deltaLabel = dashFilter.period==="all" ? "all recorded orders" : (revPrevious ? (revDelta>=0?"+":"")+revDelta+"% vs previous period" : "no prior period to compare");
 
+  // Margin % across the selected period
+  let cogs = 0;
+  current.forEach(o=>o.items.forEach(it=>{ const p=productById(it.pid); if(p) cogs += p.cost*it.qty; }));
+  const marginPct = revCurrent>0 ? Math.round(((revCurrent-cogs)/revCurrent)*1000)/10 : null;
+
   const kpis = [
     {label:"Revenue ("+periodLabel+")", value: fmt(revCurrent), delta: deltaLabel, cls: revDelta>=0?"up":"down", onclick:null},
-    {label:"Orders ("+periodLabel+")", value: current.length, delta: dashFilter.period==="all" ? "—" : previous.length+" in previous period", cls:"flat", onclick:"app.setView('orders')"},
-    {label:"Customers", value: db.customers.length, delta: db.customers.filter(c=>customerScore(c).reorderDue).length+" due to reorder", cls:"flat", onclick:"app.setView('customers')"},
-    {label:"Low stock items", value: lowStock, delta: lowStock>0 ? "needs reorder" : "all healthy", cls: lowStock>0?"down":"up", onclick:"app.setView('inventory')"},
-    {label:"Expiring / expired", value: expiringSoon, delta: expiringSoon>0 ? "within 30 days or past" : "all clear", cls: expiringSoon>0?"down":"up", onclick:"app.setView('inventory')"}
+    {label:"Gross margin", value: marginPct!==null ? marginPct+"%" : "—", delta: marginPct!==null ? "revenue minus cost of goods" : "no sales in this period", cls:"flat", onclick:"app.setView('reports')"},
+    {label:"Cost tied up in near-expiry stock", value: fmt(expiringCost), delta: expiringItems.length+" item(s)", cls: expiringCost>0?"down":"up", onclick:"app.setView('inventory')"},
+    {label:"Low stock items", value: lowStock, delta: lowStock>0 ? "needs reorder" : "all healthy", cls: lowStock>0?"down":"up", onclick:"app.setView('inventory')"}
   ];
   document.getElementById("kpi-row").innerHTML = kpis.map(k=>
     '<div class="kpi'+(k.onclick?' kpi-clickable':'')+'"'+(k.onclick?' onclick="'+k.onclick+'" title="Click to view"':'')+'><div class="kpi-label">'+k.label+'</div><div class="kpi-value">'+k.value+'</div><div class="kpi-delta '+k.cls+'">'+k.delta+'</div></div>'
   ).join("");
+
+  const insights = generateInsights(current, previous, revCurrent, revDelta, periodLabel);
+  document.getElementById("insights-row").innerHTML = insights.map(c=>
+    '<div class="insight-card '+c.type+'"><span class="insight-tag">'+c.tag+'</span><div class="insight-headline">'+c.headline+'</div><div class="insight-body">'+c.body+'</div><div class="insight-action">→ '+c.action+'</div></div>'
+  ).join("") || '<div class="empty-note">Not enough data yet to generate insights — add a few orders first.</div>';
 
   const months = monthRange.map(m=>m.key);
   const monthLabels = monthRange.map(m=>m.label);
@@ -1460,14 +1609,30 @@ function renderDashboard(){
   document.getElementById("chart-revenue").innerHTML = lineChart(values, monthLabels);
 
   let sourceOrders = current.length ? current : db.orders;
-  document.getElementById("top-products-sub").textContent = current.length ? "By revenue "+periodLabel : "By revenue (no orders match the filter — showing all-time)";
+  document.getElementById("top-products-sub").textContent = current.length ? "Revenue trend, top performers "+periodLabel : "Revenue trend (no orders match the filter — showing all-time)";
   const revByProduct = {};
   sourceOrders.forEach(o=> o.items.forEach(it=>{
     const p = productById(it.pid); if(!p) return;
     revByProduct[p.id] = (revByProduct[p.id]||0) + p.price*it.qty;
   }));
-  const top = Object.entries(revByProduct).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([pid,val])=>({label: productById(pid).name, value: val}));
-  document.getElementById("chart-products").innerHTML = barChart(top);
+  const topIds = Object.entries(revByProduct).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([pid])=>pid);
+  const topSeries = topIds.map(pid=>{
+    const p = productById(pid);
+    const seriesValues = months.map(m => db.orders.filter(o=>monthKey(o.date)===m).reduce((s,o)=>{
+      const item = o.items.find(it=>it.pid===pid);
+      return s + (item ? p.price*item.qty : 0);
+    },0));
+    return { name: p.name.length>18?p.name.slice(0,17)+"…":p.name, values: seriesValues };
+  });
+  document.getElementById("chart-products").innerHTML = multiLineChart(topSeries, monthLabels);
+
+  document.getElementById("category-pie-sub").textContent = current.length ? "Share of revenue "+periodLabel : "Share of revenue (no orders match the filter — showing all-time)";
+  const revByCat = {};
+  sourceOrders.forEach(o=>o.items.forEach(it=>{ const p=productById(it.pid); if(!p) return; revByCat[p.category]=(revByCat[p.category]||0)+p.price*it.qty; }));
+  const catData = Object.entries(revByCat).sort((a,b)=>b[1]-a[1]).slice(0,7).map(([label,value])=>({label,value}));
+  document.getElementById("chart-category-pie").innerHTML = pieChart(catData);
+
+  renderOrdersByState(current.length ? current : db.orders);
 
   document.getElementById("recent-orders-title").textContent = (dashFilter.status!=="all"||dashFilter.supply!=="all"||dashFilter.period!=="last6") ? "Orders matching filters" : "Recent orders";
   const recent = [...current].sort((a,b)=> b.date.localeCompare(a.date)).slice(0,8);
@@ -1691,6 +1856,51 @@ function lineChart(values, labels){
   const labelsSvg = labels.map((l,i)=>'<text class="axis-label" x="'+(pad+i*stepX)+'" y="'+(h-6)+'" text-anchor="middle">'+l+'</text>').join("");
   return '<svg viewBox="0 0 '+w+' '+h+'" width="100%" height="'+h+'"><defs><linearGradient id="rev-grad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1F6F5C" stop-opacity="0.22"/><stop offset="100%" stop-color="#1F6F5C" stop-opacity="0"/></linearGradient></defs><path d="'+area+'" fill="url(#rev-grad)"/><path d="'+path+'" fill="none" stroke="var(--accent)" stroke-width="2.4"/>'+dots+labelsSvg+'</svg>';
 }
+function multiLineChart(series, labels){
+  if(!series.length) return '<div class="empty-note">No sales recorded yet.</div>';
+  const w=460, h=190, pad=30, legendH=26;
+  const allValues = series.flatMap(s=>s.values);
+  const max = Math.max(...allValues, 1);
+  const stepX = (w - pad*2) / (labels.length-1 || 1);
+  const colors = ["var(--accent)","var(--gold)","#7C6FB0","#C1666B","#4E8098"];
+  const paths = series.map((s,si)=>{
+    const color = s.color || colors[si % colors.length];
+    const pts = s.values.map((v,i)=>{ const x = pad + i*stepX; const y = h - pad - (v/max)*(h-pad*1.9); return [x,y]; });
+    const path = pts.map((p,i)=> (i===0?"M":"L")+p[0].toFixed(1)+","+p[1].toFixed(1)).join(" ");
+    const dots = pts.map(p=>'<circle cx="'+p[0]+'" cy="'+p[1]+'" r="2.8" fill="'+color+'"/>').join("");
+    return '<path d="'+path+'" fill="none" stroke="'+color+'" stroke-width="2"/>'+dots;
+  }).join("");
+  const labelsSvg = labels.map((l,i)=>'<text class="axis-label" x="'+(pad+i*stepX)+'" y="'+(h-6)+'" text-anchor="middle">'+l+'</text>').join("");
+  const legend = series.map((s,si)=>{
+    const color = s.color || colors[si % colors.length];
+    return '<span style="display:inline-flex;align-items:center;gap:5px;margin-right:14px;"><span style="width:8px;height:8px;border-radius:50%;background:'+color+';display:inline-block;"></span>'+s.name+'</span>';
+  }).join("");
+  return '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:8px;">'+legend+'</div><svg viewBox="0 0 '+w+' '+h+'" width="100%" height="'+(h-legendH)+'">'+paths+labelsSvg+'</svg>';
+}
+function pieChart(items){
+  const total = items.reduce((s,i)=>s+i.value,0);
+  if(!total) return '<div class="empty-note">No sales recorded yet.</div>';
+  const colors = ["#1F6F5C","#C08A3E","#7C6FB0","#C1666B","#4E8098","#8FA79B","#B8863E"];
+  const cx=90, cy=90, r=80;
+  let angle = -90;
+  const slices = items.map((it,i)=>{
+    const frac = it.value/total;
+    const startAngle = angle;
+    const sweep = frac*360;
+    angle += sweep;
+    const endAngle = angle;
+    const toXY = (a)=>{ const rad = a*Math.PI/180; return [cx+r*Math.cos(rad), cy+r*Math.sin(rad)]; };
+    const [x1,y1] = toXY(startAngle), [x2,y2] = toXY(endAngle);
+    const largeArc = sweep>180?1:0;
+    const color = colors[i % colors.length];
+    return '<path d="M'+cx+','+cy+' L'+x1.toFixed(1)+','+y1.toFixed(1)+' A'+r+','+r+' 0 '+largeArc+' 1 '+x2.toFixed(1)+','+y2.toFixed(1)+' Z" fill="'+color+'" stroke="var(--white,#fff)" stroke-width="1.5"/>';
+  }).join("");
+  const legend = items.map((it,i)=>{
+    const pct = Math.round((it.value/total)*100);
+    return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;"><span style="width:9px;height:9px;border-radius:2px;background:'+colors[i%colors.length]+';flex:none;"></span><span style="flex:1;color:var(--ink);">'+it.label+'</span><span style="color:var(--ink-faint);">'+pct+'%</span></div>';
+  }).join("");
+  return '<div style="display:flex;gap:24px;align-items:center;flex-wrap:wrap;"><svg viewBox="0 0 180 180" width="150" height="150" style="flex:none;">'+slices+'</svg><div style="flex:1;min-width:140px;">'+legend+'</div></div>';
+}
 function barChart(items){
   if(!items.length) return '<div class="empty-note">No sales recorded yet.</div>';
   const w=460, rowH=34, pad=6;
@@ -1769,6 +1979,28 @@ function handlePhotoUpload(input){
     preview.dataset.value = e.target.result;
   };
   reader.readAsDataURL(file);
+}
+function handleLogoUpload(input){
+  const file = input.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e=>{
+    db.settings.companyLogo = e.target.result;
+    renderCompanyLogo();
+  };
+  reader.readAsDataURL(file);
+}
+function renderCompanyLogo(){
+  const logo = db.settings.companyLogo;
+  const preview = document.getElementById("set-logo-preview");
+  const placeholder = document.getElementById("set-logo-placeholder");
+  if(preview && placeholder){
+    if(logo){ preview.src = logo; preview.style.display="block"; placeholder.style.display="none"; }
+    else { preview.style.display="none"; placeholder.style.display="flex"; }
+  }
+  const sidebarMark = document.getElementById("brand-mark");
+  if(sidebarMark){
+    sidebarMark.innerHTML = logo ? '<img src="'+logo+'" style="width:100%;height:100%;object-fit:cover;border-radius:8px;">' : sidebarMark.dataset.fallback;
+  }
 }
 async function saveProduct(){
   const id = document.getElementById("product-id").value;
@@ -2009,8 +2241,11 @@ function buildInvoiceHTML(order){
   }).join("");
   return ''
     +'<div class="invoice-head">'
+      +'<div style="display:flex;gap:12px;align-items:flex-start;">'
+      +(db.settings.companyLogo ? '<img src="'+db.settings.companyLogo+'" style="width:44px;height:44px;object-fit:cover;border-radius:6px;flex:none;">' : '')
       +'<div><div class="invoice-brand">'+db.settings.name+'</div>'
       +'<div style="font-size:11.5px;color:var(--ink-soft);max-width:260px;margin-top:4px;">'+(db.settings.companyAddress||"").replace(/\n/g,"<br>")+'<br>GSTIN: '+(db.settings.companyGST||"—")+'<br>Phone: '+(db.settings.companyPhone||"—")+'</div></div>'
+      +'</div>'
       +'<div class="invoice-meta"><div style="font-weight:700;font-size:15px;color:var(--ink);">TAX INVOICE</div><div>Invoice #: '+order.id+'</div><div>Date: '+order.date+'</div><div>Status: '+order.status+'</div><div>Place of supply: '+supplyTypeLabel(supplyType)+'</div></div>'
     +'</div>'
     +'<div class="invoice-parties">'
@@ -2433,15 +2668,19 @@ function applyAppearance(a){
   root.style.setProperty("--accent-ink", shadeColor(a.accentColor, -0.35));
   root.style.setProperty("--accent-soft", shadeColor(a.accentColor, 0.85));
   root.style.setProperty("--sidebar", a.sidebarColor);
+  root.style.setProperty("--gold", a.secondaryColor || "#C08A3E");
   const zoomMap = {small:"90%", medium:"100%", large:"114%"};
   document.querySelector(".app").style.zoom = zoomMap[a.fontSize] || "100%";
+  document.body.dataset.bgPattern = a.bgPattern || "none";
 }
 async function saveAppearance(){
   const a = {
     fontFamily: document.getElementById("set-font-family").value,
     fontSize: document.getElementById("set-font-size").value,
     accentColor: document.getElementById("set-accent-color").value,
-    sidebarColor: document.getElementById("set-sidebar-color").value
+    sidebarColor: document.getElementById("set-sidebar-color").value,
+    secondaryColor: document.getElementById("set-secondary-color").value,
+    bgPattern: document.getElementById("set-bg-pattern").value
   };
   db.settings.appearance = a;
   applyAppearance(a);
@@ -2457,6 +2696,8 @@ async function resetAppearance(){
   document.getElementById("set-font-size").value = a.fontSize;
   document.getElementById("set-accent-color").value = a.accentColor;
   document.getElementById("set-sidebar-color").value = a.sidebarColor;
+  document.getElementById("set-secondary-color").value = a.secondaryColor;
+  document.getElementById("set-bg-pattern").value = a.bgPattern;
   db.settings.appearance = a;
   applyAppearance(a);
   if(supa){ try{ await pushSettingsToSupabase(); await captureBackup(); } catch(e){} return; }
@@ -2914,11 +3155,28 @@ async function renderBackupsPanel(){
 }
 
 /* ---------------- Reset / modal helpers ---------------- */
-function resetData(){
-  if(!confirm("Reset all data back to the original starter sample set? This cannot be undone.")) return;
-  db = SEED();
+async function clearAllData(){
+  if(supa && currentUser && currentUser.role!=="admin"){ alert("Only an Admin can clear all data."); return; }
+  const phrase = prompt('This permanently deletes every product, customer and order — for you and everyone on this system. Your settings, branding and team list are kept.\n\nA backup is taken automatically first, but this is still a big action.\n\nType CLEAR to confirm:');
+  if(phrase !== "CLEAR") return;
+  await captureBackup(); // one more safety snapshot, on top of the automatic ones
+  if(supa){
+    try{
+      const [{data:pRows},{data:oRows},{data:cRows}] = await Promise.all([
+        supa.from("products").select("id"), supa.from("orders").select("id"), supa.from("customers").select("id")
+      ]);
+      if(pRows && pRows.length) await supa.from("products").delete().in("id", pRows.map(r=>r.id));
+      if(oRows && oRows.length) await supa.from("orders").delete().in("id", oRows.map(r=>r.id));
+      if(cRows && cRows.length) await supa.from("customers").delete().in("id", cRows.map(r=>r.id));
+    } catch(e){ alert("Couldn't clear the shared database: "+e.message); return; }
+    await pullFromSupabase(true);
+    alert("All products, customers and orders have been cleared.");
+    return;
+  }
+  db.products = []; db.customers = []; db.orders = [];
   saveDB();
   setView(document.querySelector(".nav-item.active").dataset.view);
+  alert("All products, customers and orders have been cleared.");
 }
 function openModal(id){ document.getElementById(id).classList.add("active"); }
 function closeModal(id){ document.getElementById(id).classList.remove("active"); }
@@ -2931,7 +3189,7 @@ window.app = {
   setView, goToCustomer,
   setDashFilter, resetDashFilters,
   setReportType, setReportPeriod, exportReport, renderReports,
-  openProductModal, saveProduct, deleteProduct, renderInventory, handlePhotoUpload, priceFieldChanged,
+  openProductModal, saveProduct, deleteProduct, renderInventory, handlePhotoUpload, priceFieldChanged, handleLogoUpload,
   openCustomerModal, saveCustomer, deleteCustomer, renderCustomers,
   openOrderModal, saveOrder, addOrderLine, updateOrderTotal, orderSetSupplyType, orderChangeLineGST, orderCustomerChanged, productGSTRateOf, cycleStatus, deleteOrder, renderOrders, showInvoice, shareInvoice,
   renderPOSProducts, posAddItem, posChangeQty, posChangeLineGST, posSetSupplyType, posPickCustomer, posGuessFromAddress, completeSale,
@@ -2940,7 +3198,7 @@ window.app = {
   restoreBackupSlot, downloadBackupFile, restoreFromFile, closeFinancialYear,
   openTeamModal, saveTeamMember, deleteTeamMember, applyRolePresetToForm,
   authSignIn, authSignUp, authSignOut, authShowSignUp, authShowSignIn,
-  resetData, closeModal
+  clearAllData, closeModal
 };
 
 /* init */
@@ -2969,8 +3227,11 @@ document.getElementById("set-font-family").value = initialAppearance.fontFamily;
 document.getElementById("set-font-size").value = initialAppearance.fontSize;
 document.getElementById("set-accent-color").value = initialAppearance.accentColor;
 document.getElementById("set-sidebar-color").value = initialAppearance.sidebarColor;
+document.getElementById("set-secondary-color").value = initialAppearance.secondaryColor || "#c08a3e";
+document.getElementById("set-bg-pattern").value = initialAppearance.bgPattern || "none";
 applyAppearance(initialAppearance);
 loadClosedYears();
+renderCompanyLogo();
 renderDashboard();
 </script>
 </body>
