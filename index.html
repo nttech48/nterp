@@ -171,6 +171,12 @@
   .field-row.three{grid-template-columns:1fr 1fr 1fr;}
   .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px;}
   .field-hint{font-size:11px;color:var(--ink-faint);margin-top:4px;}
+  .perm-table{width:100%;border-collapse:collapse;margin:8px 0 14px;font-size:12.5px;}
+  .perm-table th{text-align:center;font-weight:600;color:var(--ink-faint);font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;padding:4px 6px;}
+  .perm-table th:first-child{text-align:left;}
+  .perm-table td{padding:6px;text-align:center;border-top:1px solid var(--border);}
+  .perm-table td:first-child{text-align:left;font-weight:600;color:var(--ink);}
+  .perm-table input[type=radio]{cursor:pointer;}
 
   .photo-upload{display:flex;align-items:center;gap:14px;margin-bottom:14px;}
   .photo-preview{width:64px;height:64px;border-radius:8px;object-fit:cover;background:#EEECE3;border:1px solid var(--border);}
@@ -273,22 +279,13 @@
     .slicer-bar .toggle-group{width:100%;}
   }
 
-  /* Role-based visibility — controls what the UI shows per signed-in role.
-     This is a UI convenience, not a security boundary: see supabase-schema.sql
-     for the RLS policies needed to enforce this at the database level. */
-  body[data-role="staff"] .nav-item[data-view="reports"],
-  body[data-role="staff"] .nav-item[data-view="team"],
-  body[data-role="staff"] .nav-item[data-view="settings"]{display:none;}
-
-  body[data-role="stakeholder"] .nav-item[data-view="customers"],
-  body[data-role="stakeholder"] .nav-item[data-view="pos"],
-  body[data-role="stakeholder"] .nav-item[data-view="team"],
-  body[data-role="stakeholder"] .nav-item[data-view="settings"]{display:none;}
-  body[data-role="stakeholder"] #view-inventory .topbar-actions,
-  body[data-role="stakeholder"] #view-inventory .row-actions,
-  body[data-role="stakeholder"] #view-orders .topbar-actions,
-  body[data-role="stakeholder"] #view-orders .row-actions,
-  body[data-role="stakeholder"] #view-dashboard .topbar-actions{display:none;}
+  /* Role-based visibility now lives in JS (see applyPermissions()) — each
+     signed-in person's actual per-section access is computed from their
+     saved permissions and injected as a <style> block at sign-in, since a
+     fixed set of CSS rules can't express arbitrary per-person combinations.
+     This is a UI convenience, not a security boundary on its own: see
+     supabase-schema.sql for the RLS policies that enforce it at the
+     database level. */
 </style>
 </head>
 <body>
@@ -308,6 +305,7 @@
     </div>
 
     <div id="auth-signup-form" style="display:none;">
+      <p style="font-size:12.5px;color:var(--ink-faint);margin:-4px 0 16px;">Only works if an admin has already added your email in Team &amp; Access.</p>
       <div class="field"><label>Full name</label><input id="auth-signup-name" placeholder="Your name"></div>
       <div class="field"><label>Email</label><input id="auth-signup-email" type="email" placeholder="name@company.com"></div>
       <div class="field"><label>Password</label><input id="auth-signup-password" type="password" placeholder="At least 6 characters"></div>
@@ -682,13 +680,14 @@
         <div class="panel-title" style="padding-top:14px;">People with access</div>
         <p class="panel-sub">Roles control what each person can see once they sign in.</p>
         <table>
-          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Access</th><th></th></tr></thead>
+          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Sections</th><th>Access</th><th></th></tr></thead>
           <tbody id="team-body"></tbody>
         </table>
       </div>
 
       <div class="panel" style="margin-top:16px;">
-        <div class="panel-title" style="margin-bottom:8px;">What each role can see</div>
+        <div class="panel-title" style="margin-bottom:8px;">Role starting points</div>
+        <p class="panel-sub">Picking a role fills these in as a starting point — edit any team member to fine-tune their access section by section.</p>
         <table>
           <thead><tr><th>Role</th><th>Dashboard</th><th>Inventory</th><th>Customers</th><th>Orders</th><th>POS</th><th>Reports</th><th>Settings</th></tr></thead>
           <tbody>
@@ -813,6 +812,12 @@
           </div>
         </div>
         <p class="field-hint" style="margin-top:12px;">Products are matched and updated by SKU — importing the same file twice updates prices/stock rather than duplicating. Column names from Shopify (<code>Variant SKU</code>, <code>Variant Price</code>...) and WooCommerce (<code>SKU</code>, <code>Regular price</code>...) are recognized automatically alongside plain <code>SKU</code>/<code>Price</code>/<code>Stock</code> headers.</p>
+      </div>
+
+      <div class="panel" style="margin-bottom:16px;">
+        <div class="panel-title" style="margin-bottom:4px;">Financial year</div>
+        <p class="panel-sub">Close a year once its GST returns are filed — orders inside a closed year can't be edited, status-changed, or deleted by anyone, which protects what you've already filed. The next year opens automatically.</p>
+        <div id="fy-panel-body"><div class="empty-note">Open Settings to load financial year status.</div></div>
       </div>
 
       <div class="panel" style="margin-bottom:16px;">
@@ -956,18 +961,25 @@
 <!-- TEAM MEMBER MODAL -->
 <div class="overlay" id="team-overlay">
   <div class="modal">
-    <h3>Add team member</h3>
+    <h3 id="team-modal-title">Add team member</h3>
     <p class="modal-sub">They'll sign in with this email — make sure it matches the address they'll use.</p>
+    <input type="hidden" id="team-id" value="">
     <div class="field"><label>Full name</label><input id="team-name" placeholder="e.g. Ananya Ghosh"></div>
     <div class="field"><label>Email</label><input id="team-email" placeholder="name@company.com"></div>
-    <div class="field"><label>Role</label>
-      <select id="team-role">
+    <div class="field"><label>Role (starting preset)</label>
+      <select id="team-role" onchange="app.applyRolePresetToForm()">
         <option value="admin">Admin — full access</option>
         <option value="staff" selected>Staff — day-to-day operations</option>
         <option value="stakeholder">Stakeholder — dashboard &amp; reports only</option>
       </select>
     </div>
-    <p class="field-hint">Adding someone here grants them access once they sign in with this email — it doesn't send an email invite by itself. Share the site link with them directly.</p>
+    <p class="field-hint" style="margin:-8px 0 12px;">Picking a role fills in a sensible starting point below — adjust anything per-person before saving.</p>
+    <div class="field"><label>Access per section</label></div>
+    <table class="perm-table">
+      <thead><tr><th>Section</th><th>None</th><th>View</th><th>Edit</th></tr></thead>
+      <tbody id="team-permissions-body"></tbody>
+    </table>
+    <p class="field-hint">Adding someone here grants them access once they sign in with this email — it doesn't send an email invite by itself. Share the site link with them directly; they'll only be able to create their login if their email is listed here first.</p>
     <div class="modal-actions">
       <button class="btn secondary" onclick="app.closeModal('team-overlay')">Cancel</button>
       <button class="btn" onclick="app.saveTeamMember()">Add member</button>
@@ -1120,6 +1132,65 @@ const DB_KEY = "larkspur_demo_db_v6";
 const TODAY = new Date();
 function todayStr(){ return TODAY.toISOString().slice(0,10); }
 
+/* ---------------- Financial year (Apr–Mar, India) ---------------- */
+function financialYearFor(dateStr){
+  const d = new Date(dateStr);
+  const y = d.getFullYear(), m = d.getMonth(); // month is 0-indexed; April = 3
+  const startYear = m >= 3 ? y : y-1;
+  return { id: "FY"+startYear+"-"+String(startYear+1).slice(2), start: startYear+"-04-01", end: (startYear+1)+"-03-31" };
+}
+let closedYearsCache = [];
+async function loadClosedYears(){
+  if(supa){
+    try{
+      const { data, error } = await supa.from("financial_years").select("*").eq("status","closed");
+      if(error) throw error;
+      closedYearsCache = (data||[]).map(r=>r.id);
+    } catch(e){ closedYearsCache = []; }
+  } else {
+    closedYearsCache = db.settings.closedFinancialYears || [];
+  }
+  return closedYearsCache;
+}
+function isDateInClosedYear(dateStr){
+  return closedYearsCache.includes(financialYearFor(dateStr).id);
+}
+async function closeFinancialYear(){
+  const fy = financialYearFor(todayStr());
+  if(closedYearsCache.includes(fy.id)){ alert(fy.id+" is already closed."); return; }
+  if(!confirm("Close "+fy.id+" ("+fy.start+" to "+fy.end+")?\n\nOrders dated within this year can no longer be edited, have their status changed, or be deleted — this protects filed GST returns from later changes. This can't be undone from here (an Admin can reopen it directly in Supabase if truly needed).")) return;
+  if(supa){
+    try{
+      const { error } = await supa.from("financial_years").upsert({ id: fy.id, start_date: fy.start, end_date: fy.end, status: "closed", closed_at: new Date().toISOString(), closed_by: currentUser?currentUser.email:null });
+      if(error) throw error;
+    } catch(e){ alert("Couldn't close the year: "+e.message); return; }
+    await loadClosedYears();
+    await captureBackup();
+  } else {
+    db.settings.closedFinancialYears = [...(db.settings.closedFinancialYears||[]), fy.id];
+    saveDB();
+    await loadClosedYears();
+  }
+  alert(fy.id+" is now closed. "+financialYearFor(new Date(new Date(fy.end).getTime()+86400000).toISOString()).id+" is open.");
+  renderFinancialYearPanel();
+}
+async function renderFinancialYearPanel(){
+  const el = document.getElementById("fy-panel-body");
+  if(!el) return;
+  await loadClosedYears();
+  const current = financialYearFor(todayStr());
+  const isCurrentClosed = closedYearsCache.includes(current.id);
+  let html = '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border);">'
+    +'<div><div style="font-weight:600;font-size:13.5px;">'+current.id+' (current)</div><div style="font-size:12px;color:var(--ink-faint);">'+current.start+' to '+current.end+'</div></div>'
+    +(isCurrentClosed ? '<span class="pill muted">Closed</span>' : '<button class="btn danger small" onclick="app.closeFinancialYear()">Close this year</button>')
+    +'</div>';
+  const otherClosed = closedYearsCache.filter(id=>id!==current.id);
+  if(otherClosed.length){
+    html += otherClosed.map(id=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border);"><div style="font-weight:600;font-size:13.5px;">'+id+'</div><span class="pill muted">Closed</span></div>').join("");
+  }
+  el.innerHTML = html;
+}
+
 function loadDB(){
   const raw = localStorage.getItem(DB_KEY);
   if(!raw){ const seeded = SEED(); localStorage.setItem(DB_KEY, JSON.stringify(seeded)); return seeded; }
@@ -1260,7 +1331,7 @@ function setView(view){
   if(view==="pos") renderPOS();
   if(view==="reports") renderReports();
   if(view==="team") renderTeam();
-  if(view==="settings") renderBackupsPanel();
+  if(view==="settings"){ renderBackupsPanel(); renderFinancialYearPanel(); }
 }
 document.querySelectorAll(".nav-item[data-view]").forEach(btn=>{
   btn.addEventListener("click", ()=> setView(btn.dataset.view));
@@ -1820,6 +1891,7 @@ async function upsertOrderToSupabase(order){
 }
 async function cycleStatus(id){
   const order = db.orders.find(o=>o.id===id);
+  if(isDateInClosedYear(order.date)){ alert("This order is in "+financialYearFor(order.date).id+", which is closed. Its status can't be changed."); return; }
   const cycle = ["Pending","Paid","Shipped"];
   const nextStatus = cycle[(cycle.indexOf(order.status)+1)%cycle.length];
   if(supa){
@@ -1832,6 +1904,8 @@ async function cycleStatus(id){
   saveDB(); renderOrders();
 }
 async function deleteOrder(id){
+  const existing = db.orders.find(o=>o.id===id);
+  if(existing && isDateInClosedYear(existing.date)){ alert("This order is in "+financialYearFor(existing.date).id+", which is closed. It can't be deleted."); return; }
   if(supa){
     if(!confirm("Delete order "+id+"? This can't be undone.")) return;
     try{ const { error } = await supa.from("orders").delete().eq("id", id); if(error) throw error; }
@@ -1908,6 +1982,7 @@ async function saveOrder(){
     gst: Number(line.querySelector(".line-gst").value)
   }));
   if(!items.length) return;
+  if(isDateInClosedYear(todayStr())){ alert("This financial year is closed. New orders can't be added until an Admin addresses this."); return; }
   const nextNum = 1000 + db.orders.length + 43;
   const order = { id:"ORD-"+nextNum, customerId, date: todayStr(), items, status:"Pending", supplyType: orderSupplyType };
   if(supa){
@@ -2074,6 +2149,7 @@ function posPickCustomer(){
 }
 async function completeSale(){
   if(!posCart.length){ alert("Add at least one item to the cart first."); return; }
+  if(isDateInClosedYear(todayStr())){ alert("This financial year is closed. New sales can't be recorded until an Admin addresses this."); return; }
   let customerId = document.getElementById("pos-customer-select").value;
   const name = document.getElementById("pos-name").value.trim();
   const phone = document.getElementById("pos-phone").value.trim();
@@ -2253,6 +2329,7 @@ function handleImport(input, kind){
 function applyImport(rows, kind){
   if(!rows.length){ alert("No rows found in that file."); return; }
   let count = 0;
+  let skippedClosed = 0;
   if(kind==="products"){
     rows.forEach(r=>{
       const sku = pick(r,["SKU","Variant SKU"]).trim(); if(!sku) return;
@@ -2307,7 +2384,9 @@ function applyImport(rows, kind){
         return {pid:p.id, qty:Number(qty)||1, gst: gst!==undefined ? Number(gst) : productGSTRate(p)};
       }).filter(Boolean);
       const supplyType = (pick(r,["SupplyType","Supply Type"])||"intra").toLowerCase()==="inter" ? "inter" : "intra";
-      const data = { id: orderId, customerId: customer?customer.id:null, date: pick(r,["Date"])||todayStr(), items, status: pick(r,["Status"])||"Pending", supplyType };
+      const orderDate = pick(r,["Date"])||todayStr();
+      if(isDateInClosedYear(orderDate)){ skippedClosed++; return; }
+      const data = { id: orderId, customerId: customer?customer.id:null, date: orderDate, items, status: pick(r,["Status"])||"Pending", supplyType };
       const existing = db.orders.find(o=>o.id===orderId);
       if(existing) Object.assign(existing, data);
       else if(data.customerId && items.length) db.orders.push(data);
@@ -2315,7 +2394,7 @@ function applyImport(rows, kind){
     });
     saveDB(); renderOrders();
   }
-  alert("Imported "+count+" row(s) into "+kind+".");
+  alert("Imported "+count+" row(s) into "+kind+"."+(skippedClosed?" ("+skippedClosed+" skipped — dated inside a closed financial year.)":""));
 }
 
 /* ---------------- Settings ---------------- */
@@ -2442,32 +2521,50 @@ async function resolveRoleAndEnter(user){
     let mine = existing.find(m=>m.email.toLowerCase()===email.toLowerCase());
     if(!mine && existing.length===0){
       // Bootstrap: nobody's on the team list yet — the first person to sign in becomes Admin.
-      const row = { id: "t"+Date.now(), name: email.split("@")[0], email, role: "admin" };
+      const row = { id: "t"+Date.now(), name: email.split("@")[0], email, role: "admin", permissions: ROLE_PRESETS.admin };
       await supa.from("team_members").insert(row);
       mine = row;
     }
     if(!mine){ currentUser = null; await supa.auth.signOut(); showAuthGate("denied"); return; }
-    currentUser = { email: mine.email, name: mine.name, role: mine.role };
+    currentUser = { email: mine.email, name: mine.name, role: mine.role, permissions: mine.permissions || ROLE_PRESETS[mine.role] || ROLE_PRESETS.staff };
     applyRoleUI(currentUser);
     hideAuthGate();
     pullFromSupabase(true);
   } catch(e){
     // Team check failed (e.g. table missing) — fail open to admin locally so a fresh
     // Supabase project (before supabase-schema.sql has been run) doesn't lock you out.
-    currentUser = { email, name: email.split("@")[0], role: "admin" };
+    currentUser = { email, name: email.split("@")[0], role: "admin", permissions: ROLE_PRESETS.admin };
     applyRoleUI(currentUser);
     hideAuthGate();
   }
 }
+function applyPermissions(perms){
+  let styleEl = document.getElementById("dynamic-permissions-style");
+  if(!styleEl){ styleEl = document.createElement("style"); styleEl.id = "dynamic-permissions-style"; document.head.appendChild(styleEl); }
+  let css = "";
+  PERMISSION_MODULES.forEach(m=>{
+    const level = (perms && perms[m.key]) || "none";
+    if(level==="none"){
+      css += '.nav-item[data-view="'+m.key+'"]{display:none !important;}\n';
+    } else if(level==="view"){
+      css += '#view-'+m.key+' .topbar-actions, #view-'+m.key+' .row-actions{display:none !important;}\n';
+    }
+  });
+  styleEl.textContent = css;
+}
 function applyRoleUI(user){
   document.body.dataset.role = user.role;
+  applyPermissions(user.permissions || ROLE_PRESETS[user.role] || ROLE_PRESETS.staff);
   const who = document.getElementById("who-name-slot");
   const role = document.getElementById("who-role-slot");
   if(who) who.textContent = user.name || user.email;
   if(role) role.innerHTML = '<span class="dot on"></span> '+user.role.charAt(0).toUpperCase()+user.role.slice(1)+' · <a href="#" onclick="app.authSignOut(event)" style="color:inherit;">Sign out</a>';
-  // Land non-admins somewhere they're allowed to see
+  // Land the person somewhere they're actually allowed to see
   const active = document.querySelector(".nav-item.active");
-  if(active && getComputedStyle(active).display==="none") setView("dashboard");
+  if(active && getComputedStyle(active).display==="none"){
+    const firstVisible = [...document.querySelectorAll(".nav-item[data-view]")].find(b=>getComputedStyle(b).display!=="none");
+    setView(firstVisible ? firstVisible.dataset.view : "dashboard");
+  }
 }
 async function authSignIn(){
   const email = document.getElementById("auth-email").value.trim();
@@ -2486,9 +2583,22 @@ async function authSignUp(){
   const email = document.getElementById("auth-signup-email").value.trim();
   const password = document.getElementById("auth-signup-password").value;
   const errEl = document.getElementById("auth-signup-error");
-  errEl.style.display = "none";
+  errEl.style.display = "none"; errEl.className = "auth-error";
   if(!name || !email || !password){ errEl.textContent = "Fill in your name, email and a password."; errEl.style.display="block"; return; }
   if(password.length < 6){ errEl.textContent = "Password needs to be at least 6 characters."; errEl.style.display="block"; return; }
+  // Gate account creation to people an Admin has already added — except the very
+  // first person ever (empty team list), who becomes Admin automatically.
+  try{
+    const { data: existing, error: checkErr } = await supa.from("team_members").select("email");
+    if(checkErr) throw checkErr;
+    const already = (existing||[]).length > 0;
+    const isListed = (existing||[]).some(m=>m.email.toLowerCase()===email.toLowerCase());
+    if(already && !isListed){
+      errEl.textContent = "This email hasn't been added by an admin yet. Ask them to add you in Team & Access first, then come back and create your account.";
+      errEl.style.display = "block";
+      return;
+    }
+  } catch(e){ errEl.textContent = "Couldn't verify access right now: "+e.message; errEl.style.display="block"; return; }
   try{
     const { data, error } = await supa.auth.signUp({ email, password, options: { data: { name } } });
     if(error) throw error;
@@ -2505,6 +2615,42 @@ async function authSignOut(e){
 }
 
 /* ---------------- Team & Access ---------------- */
+const PERMISSION_MODULES = [
+  { key:"inventory", label:"Inventory" },
+  { key:"customers", label:"Customers" },
+  { key:"orders", label:"Orders" },
+  { key:"pos", label:"Point of Sale" },
+  { key:"reports", label:"Reports" },
+  { key:"team", label:"Team & Access" },
+  { key:"settings", label:"Settings" },
+];
+const ROLE_PRESETS = {
+  admin:       { inventory:"edit", customers:"edit", orders:"edit", pos:"edit", reports:"edit", team:"edit", settings:"edit" },
+  staff:       { inventory:"edit", customers:"edit", orders:"edit", pos:"edit", reports:"none", team:"none", settings:"none" },
+  stakeholder: { inventory:"view", customers:"none", orders:"view", pos:"none", reports:"view", team:"none", settings:"none" },
+};
+function renderPermissionsTable(perms){
+  document.getElementById("team-permissions-body").innerHTML = PERMISSION_MODULES.map(m=>{
+    const level = (perms && perms[m.key]) || "none";
+    return "<tr><td>"+m.label+"</td>"
+      + ["none","view","edit"].map(opt=>{
+          const disabled = (m.key==="pos" && opt==="view") ? "disabled" : ""; // POS has no meaningful view-only mode
+          return '<td><input type="radio" name="perm-'+m.key+'" value="'+opt+'" '+(level===opt?"checked":"")+" "+disabled+"></td>";
+        }).join("")
+      + "</tr>";
+  }).join("");
+}
+function applyRolePresetToForm(){
+  renderPermissionsTable(ROLE_PRESETS[document.getElementById("team-role").value]);
+}
+function collectPermissionsFromForm(){
+  const perms = {};
+  PERMISSION_MODULES.forEach(m=>{
+    const checked = document.querySelector('input[name="perm-'+m.key+'"]:checked');
+    perms[m.key] = checked ? checked.value : "none";
+  });
+  return perms;
+}
 function renderTeam(){
   const statusEl = document.getElementById("team-auth-status");
   if(!supa){
@@ -2514,24 +2660,35 @@ function renderTeam(){
   } else {
     statusEl.innerHTML = '<div class="panel-title" style="margin-bottom:6px;">Connected, not signed in</div><p class="panel-sub">Add people below, then share the site link — they\'ll be asked to sign in.</p>';
   }
-  document.getElementById("team-body").innerHTML = db.team.map(m=>
-    '<tr><td>'+m.name+'</td><td>'+m.email+'</td><td><span class="pill '+(m.role==="admin"?"gold":m.role==="staff"?"success":"muted")+'">'+m.role+'</span></td>'
+  document.getElementById("team-body").innerHTML = db.team.map(m=>{
+    const perms = m.permissions || ROLE_PRESETS[m.role] || ROLE_PRESETS.staff;
+    const isCustom = JSON.stringify(perms) !== JSON.stringify(ROLE_PRESETS[m.role]);
+    const accessSummary = PERMISSION_MODULES.filter(mod=>perms[mod.key]!=="none").map(mod=>mod.label+(perms[mod.key]==="view"?" (view)":"")).join(", ") || "No sections";
+    return '<tr><td>'+m.name+'</td><td>'+m.email+'</td><td><span class="pill '+(m.role==="admin"?"gold":m.role==="staff"?"success":"muted")+'">'+m.role+(isCustom?" · custom":"")+'</span></td>'
+    +'<td style="max-width:220px;font-size:11.5px;color:var(--ink-soft);">'+accessSummary+'</td>'
     +'<td>'+(currentUser && currentUser.email.toLowerCase()===m.email.toLowerCase() ? '<span class="pill success">This is you</span>' : '—')+'</td>'
-    +'<td><button class="icon-btn danger-hover" title="Remove access" onclick="app.deleteTeamMember(\''+m.id+'\')">'+ICON_DELETE+'</button></td></tr>'
-  ).join("") || '<tr><td colspan="5"><div class="empty-note">No team members added yet — you have full access by default until you add others.</div></td></tr>';
+    +'<td><div class="row-actions"><button class="icon-btn" title="Edit access" onclick="app.openTeamModal(\''+m.id+'\')">'+ICON_EDIT+' Edit</button><button class="icon-btn danger-hover" title="Remove access" onclick="app.deleteTeamMember(\''+m.id+'\')">'+ICON_DELETE+'</button></div></td></tr>';
+  }).join("") || '<tr><td colspan="6"><div class="empty-note">No team members added yet — you have full access by default until you add others.</div></td></tr>';
 }
-function openTeamModal(){
-  document.getElementById("team-name").value = "";
-  document.getElementById("team-email").value = "";
-  document.getElementById("team-role").value = "staff";
+function openTeamModal(id){
+  const m = id ? db.team.find(t=>t.id===id) : null;
+  document.getElementById("team-modal-title").textContent = m ? "Edit team member" : "Add team member";
+  document.getElementById("team-id").value = id || "";
+  document.getElementById("team-name").value = m ? m.name : "";
+  document.getElementById("team-email").value = m ? m.email : "";
+  document.getElementById("team-email").disabled = !!m;
+  document.getElementById("team-role").value = m ? m.role : "staff";
+  renderPermissionsTable(m ? (m.permissions || ROLE_PRESETS[m.role]) : ROLE_PRESETS.staff);
   openModal("team-overlay");
 }
 async function saveTeamMember(){
+  const id = document.getElementById("team-id").value;
   const name = document.getElementById("team-name").value.trim();
   const email = document.getElementById("team-email").value.trim().toLowerCase();
   const role = document.getElementById("team-role").value;
+  const permissions = collectPermissionsFromForm();
   if(!name || !email){ alert("Enter a name and email."); return; }
-  const row = { id: "t"+Date.now(), name, email, role };
+  const row = { id: id || ("t"+Date.now()), name, email, role, permissions };
   if(supa){
     try{ const { error } = await supa.from("team_members").upsert(row); if(error) throw error; await captureBackup(); }
     catch(e){ alert("Couldn't save this team member: "+e.message+"\n\nMake sure you've run the latest supabase-schema.sql, and that you're an Admin."); return; }
@@ -2540,7 +2697,8 @@ async function saveTeamMember(){
     renderTeam();
     return;
   }
-  db.team.push(row);
+  if(id){ const existing = db.team.find(t=>t.id===id); Object.assign(existing, row); }
+  else db.team.push(row);
   saveDB();
   closeModal("team-overlay");
   renderTeam();
@@ -2735,8 +2893,8 @@ window.app = {
   renderPOSProducts, posAddItem, posChangeQty, posChangeLineGST, posSetSupplyType, posPickCustomer, posGuessFromAddress, completeSale,
   exportProducts, exportCustomers, exportOrders, exportAllJSON, toggleExportMenu, handleImport,
   saveSettings, saveAppearance, resetAppearance, connectSupabase, pushToSupabase, pullFromSupabase,
-  restoreBackupSlot, downloadBackupFile, restoreFromFile,
-  openTeamModal, saveTeamMember, deleteTeamMember,
+  restoreBackupSlot, downloadBackupFile, restoreFromFile, closeFinancialYear,
+  openTeamModal, saveTeamMember, deleteTeamMember, applyRolePresetToForm,
   authSignIn, authSignUp, authSignOut, authShowSignUp, authShowSignIn,
   resetData, closeModal
 };
@@ -2763,6 +2921,7 @@ document.getElementById("set-font-size").value = initialAppearance.fontSize;
 document.getElementById("set-accent-color").value = initialAppearance.accentColor;
 document.getElementById("set-sidebar-color").value = initialAppearance.sidebarColor;
 applyAppearance(initialAppearance);
+loadClosedYears();
 renderDashboard();
 </script>
 </body>
