@@ -195,6 +195,26 @@
   .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px;}
   .field-hint{font-size:11px;color:var(--ink-faint);margin-top:4px;}
   .perm-table{width:100%;border-collapse:collapse;margin:8px 0 14px;font-size:12.5px;}
+  .task-board{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;align-items:start;}
+  .task-col{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:14px;min-width:0;}
+  .task-col-head{display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700;color:var(--ink);margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+  .task-col-count{background:var(--accent-soft);color:var(--accent-ink);border-radius:20px;padding:1px 8px;font-size:11px;font-weight:700;}
+  .task-col-body{display:flex;flex-direction:column;gap:10px;min-height:40px;}
+  .task-card{background:var(--white,#fff);border:1px solid var(--border);border-radius:7px;padding:12px 13px;font-size:12.5px;}
+  .task-card .task-title{font-weight:600;color:var(--ink);margin-bottom:5px;font-size:13px;}
+  .task-card .task-desc{color:var(--ink-soft);font-size:11.5px;margin-bottom:8px;line-height:1.4;}
+  .task-card .task-meta{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px;}
+  .task-card .task-assignee{font-size:11px;color:var(--ink-faint);}
+  .task-card .task-due{font-size:11px;color:var(--ink-faint);}
+  .task-card .task-due.overdue{color:#A23B3B;font-weight:700;}
+  .task-priority{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;padding:2px 7px;border-radius:20px;}
+  .task-priority.high{background:#FBEAEA;color:#A23B3B;}
+  .task-priority.medium{background:var(--gold-soft,#F5EAD6);color:#8A611E;}
+  .task-priority.low{background:var(--accent-soft);color:var(--accent-ink);}
+  .task-card-actions{display:flex;gap:6px;flex-wrap:wrap;}
+  .task-card-actions button{font-size:11px;padding:4px 8px;border-radius:5px;border:1px solid var(--border);background:#fff;cursor:pointer;color:var(--ink-soft);font-family:inherit;}
+  .task-card-actions button:hover{border-color:var(--accent);color:var(--accent-ink);}
+  @media (max-width:900px){ .task-board{grid-template-columns:1fr;} }
   .perm-table th{text-align:center;font-weight:600;color:var(--ink-faint);font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;padding:4px 6px;}
   .perm-table th:first-child{text-align:left;}
   .perm-table td{padding:6px;text-align:center;border-top:1px solid var(--border);}
@@ -380,6 +400,10 @@
       <button class="nav-item" data-view="pos">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3v4"/><path d="M8 3v4"/><path d="M2 11h20"/></svg>
         Point of Sale
+      </button>
+      <button class="nav-item" data-view="tasks">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        Tasks
       </button>
       <button class="nav-item" data-view="reports">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
@@ -639,6 +663,52 @@
           <div id="pos-tax-rows"></div>
           <div class="order-total-row"><span>Total</span><span id="pos-total">₹0</span></div>
           <button class="btn gold" style="width:100%;justify-content:center;margin-top:14px;" onclick="app.completeSale()">Complete sale &amp; print bill</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- TASKS -->
+    <section class="view" id="view-tasks">
+      <div class="topbar">
+        <div>
+          <h1 class="page-title">Tasks</h1>
+          <p class="page-sub">Assign work, track status, see what's overdue.</p>
+        </div>
+        <div class="topbar-actions">
+          <button class="btn" onclick="app.openTaskModal()">+ New task</button>
+        </div>
+      </div>
+
+      <div class="slicer-bar">
+        <div class="slicer-group">
+          <span class="slicer-label">Assignee</span>
+          <select id="task-filter-assignee" onchange="app.renderTasks()">
+            <option value="all">Everyone</option>
+          </select>
+        </div>
+        <div class="slicer-group">
+          <span class="slicer-label">Priority</span>
+          <select id="task-filter-priority" onchange="app.renderTasks()">
+            <option value="all">All priorities</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="task-board">
+        <div class="task-col">
+          <div class="task-col-head"><span>To do</span><span class="task-col-count" id="count-todo">0</span></div>
+          <div class="task-col-body" id="col-todo"></div>
+        </div>
+        <div class="task-col">
+          <div class="task-col-head"><span>In progress</span><span class="task-col-count" id="count-in_progress">0</span></div>
+          <div class="task-col-body" id="col-in_progress"></div>
+        </div>
+        <div class="task-col">
+          <div class="task-col-head"><span>Done</span><span class="task-col-count" id="count-done">0</span></div>
+          <div class="task-col-body" id="col-done"></div>
         </div>
       </div>
     </section>
@@ -1050,6 +1120,39 @@
   </div>
 </div>
 
+<div class="overlay" id="task-overlay">
+  <div class="modal">
+    <h3 id="task-modal-title">New task</h3>
+    <input type="hidden" id="task-id" value="">
+    <div class="field"><label>Title</label><input id="task-title" placeholder="e.g. Reorder ceramic vases"></div>
+    <div class="field"><label>Description (optional)</label><textarea id="task-description" placeholder="Any details the assignee will need"></textarea></div>
+    <div class="field-row">
+      <div class="field"><label>Assign to</label><select id="task-assignee"></select></div>
+      <div class="field"><label>Priority</label>
+        <select id="task-priority">
+          <option value="low">Low</option>
+          <option value="medium" selected>Medium</option>
+          <option value="high">High</option>
+        </select>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Due date (optional)</label><input id="task-due" type="date"></div>
+      <div class="field"><label>Status</label>
+        <select id="task-status">
+          <option value="todo">To do</option>
+          <option value="in_progress">In progress</option>
+          <option value="done">Done</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="app.closeModal('task-overlay')">Cancel</button>
+      <button class="btn" onclick="app.saveTask()">Save task</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /* =========================================================
    Nitish Tyagi & Co. — Operations (ERP / CRM / POS / dashboard)
@@ -1188,7 +1291,12 @@ const SEED = () => ({
     { id: 'ORD-1065', customerId: 'c29', date: '2026-09-10', items:[{pid:'p6',qty:2}], status: 'Pending', supplyType: 'intra' },
     { id: 'ORD-1066', customerId: 'c4', date: '2026-09-12', items:[{pid:'p2',qty:1},{pid:'p9',qty:1}], status: 'Pending', supplyType: 'inter' }
   ],
-  team: []
+  team: [],
+  tasks: [
+    { id: 't1001', title: 'Reorder Hand-poured Soy Candle', description: 'Stock is below threshold — check with supplier on lead time.', assigneeEmail: null, createdBy: null, priority: 'high', status: 'todo', dueDate: null },
+    { id: 't1002', title: 'Photograph new Iron Wall Shelf batch', description: 'Need product photos for the listing before next catalog update.', assigneeEmail: null, createdBy: null, priority: 'medium', status: 'in_progress', dueDate: null },
+    { id: 't1003', title: 'Confirm GST filing for last quarter', description: '', assigneeEmail: null, createdBy: null, priority: 'high', status: 'done', dueDate: null }
+  ]
 });
 
 const DB_KEY = "larkspur_demo_db_v6";
@@ -1261,6 +1369,7 @@ function loadDB(){
     const parsed = JSON.parse(raw);
     parsed.settings = Object.assign(SEED().settings, parsed.settings||{});
     if(!parsed.team) parsed.team = [];
+    if(!parsed.tasks) parsed.tasks = [];
     return parsed;
   } catch(e){ const seeded = SEED(); localStorage.setItem(DB_KEY, JSON.stringify(seeded)); return seeded; }
 }
@@ -1419,6 +1528,7 @@ function setView(view){
   if(view==="pos") renderPOS();
   if(view==="reports") renderReports();
   if(view==="team") renderTeam();
+  if(view==="tasks") renderTasks();
   if(view==="settings"){ renderBackupsPanel(); renderFinancialYearPanel(); }
 }
 document.querySelectorAll(".nav-item[data-view]").forEach(btn=>{
@@ -2876,14 +2986,15 @@ const PERMISSION_MODULES = [
   { key:"customers", label:"Customers" },
   { key:"orders", label:"Orders" },
   { key:"pos", label:"Point of Sale" },
+  { key:"tasks", label:"Tasks" },
   { key:"reports", label:"Reports" },
   { key:"team", label:"Team & Access" },
   { key:"settings", label:"Settings" },
 ];
 const ROLE_PRESETS = {
-  admin:       { inventory:"edit", customers:"edit", orders:"edit", pos:"edit", reports:"edit", team:"edit", settings:"edit" },
-  staff:       { inventory:"edit", customers:"edit", orders:"edit", pos:"edit", reports:"none", team:"none", settings:"none" },
-  stakeholder: { inventory:"view", customers:"none", orders:"view", pos:"none", reports:"view", team:"none", settings:"none" },
+  admin:       { inventory:"edit", customers:"edit", orders:"edit", pos:"edit", tasks:"edit", reports:"edit", team:"edit", settings:"edit" },
+  staff:       { inventory:"edit", customers:"edit", orders:"edit", pos:"edit", tasks:"edit", reports:"none", team:"none", settings:"none" },
+  stakeholder: { inventory:"view", customers:"none", orders:"view", pos:"none", tasks:"none", reports:"view", team:"none", settings:"none" },
 };
 function renderPermissionsTable(perms){
   document.getElementById("team-permissions-body").innerHTML = PERMISSION_MODULES.map(m=>{
@@ -2937,6 +3048,134 @@ function openTeamModal(id){
   renderPermissionsTable(m ? (m.permissions || ROLE_PRESETS[m.role]) : ROLE_PRESETS.staff);
   openModal("team-overlay");
 }
+
+/* =========================================================
+   Tasks
+   ========================================================= */
+async function upsertTaskToSupabase(t){
+  const row = { id: t.id, title: t.title, description: t.description||null, assignee_email: t.assigneeEmail||null, created_by: t.createdBy||null, priority: t.priority, status: t.status, due_date: t.dueDate||null };
+  const { error } = await supa.from("tasks").upsert(row);
+  if(error) throw error;
+}
+function assigneeOptionsHTML(selected){
+  let html = '<option value="">Unassigned</option>';
+  html += db.team.map(m=>'<option value="'+m.email+'" '+(m.email===selected?"selected":"")+'>'+m.name+'</option>').join("");
+  return html;
+}
+function taskAssigneeName(email){
+  if(!email) return "Unassigned";
+  const m = db.team.find(t=>t.email===email);
+  return m ? m.name : email;
+}
+function openTaskModal(id){
+  const t = id ? db.tasks.find(x=>x.id===id) : null;
+  document.getElementById("task-modal-title").textContent = t ? "Edit task" : "New task";
+  document.getElementById("task-id").value = id || "";
+  document.getElementById("task-title").value = t ? t.title : "";
+  document.getElementById("task-description").value = t ? (t.description||"") : "";
+  document.getElementById("task-assignee").innerHTML = assigneeOptionsHTML(t ? t.assigneeEmail : (currentUser?currentUser.email:""));
+  document.getElementById("task-priority").value = t ? t.priority : "medium";
+  document.getElementById("task-due").value = t ? (t.dueDate||"") : "";
+  document.getElementById("task-status").value = t ? t.status : "todo";
+  openModal("task-overlay");
+}
+async function saveTask(){
+  const id = document.getElementById("task-id").value;
+  const title = document.getElementById("task-title").value.trim();
+  if(!title){ alert("Give the task a title."); return; }
+  const t = {
+    id: id || ("t"+Date.now()),
+    title,
+    description: document.getElementById("task-description").value.trim(),
+    assigneeEmail: document.getElementById("task-assignee").value || null,
+    createdBy: (db.tasks.find(x=>x.id===id)||{}).createdBy || (currentUser?currentUser.email:null),
+    priority: document.getElementById("task-priority").value,
+    status: document.getElementById("task-status").value,
+    dueDate: document.getElementById("task-due").value || null
+  };
+  if(supa){
+    try{ await upsertTaskToSupabase(t); await captureBackup(); }
+    catch(e){ alert("Couldn't save this task: "+e.message); return; }
+    closeModal("task-overlay");
+    await pullFromSupabase(true);
+    return;
+  }
+  if(id){ Object.assign(db.tasks.find(x=>x.id===id), t); }
+  else db.tasks.push(t);
+  saveDB();
+  closeModal("task-overlay");
+  renderTasks();
+}
+async function deleteTask(id){
+  if(!confirm("Delete this task? This can't be undone.")) return;
+  if(supa){
+    try{ const { error } = await supa.from("tasks").delete().eq("id", id); if(error) throw error; await captureBackup(); }
+    catch(e){ alert("Couldn't delete this task: "+e.message); return; }
+    await pullFromSupabase(true);
+    return;
+  }
+  db.tasks = db.tasks.filter(t=>t.id!==id);
+  saveDB();
+  renderTasks();
+}
+async function moveTask(id, newStatus){
+  const t = db.tasks.find(x=>x.id===id); if(!t) return;
+  if(supa){
+    try{ await upsertTaskToSupabase({...t, status:newStatus}); }
+    catch(e){ alert("Couldn't update this task: "+e.message); return; }
+    await pullFromSupabase(true);
+    return;
+  }
+  t.status = newStatus;
+  saveDB();
+  renderTasks();
+}
+function renderTasks(){
+  const assigneeSelect = document.getElementById("task-filter-assignee");
+  if(assigneeSelect.options.length <= 1){
+    assigneeSelect.innerHTML = '<option value="all">Everyone</option>'
+      + db.team.map(m=>'<option value="'+m.email+'">'+m.name+'</option>').join("")
+      + '<option value="unassigned">Unassigned</option>';
+  }
+  const assigneeFilter = assigneeSelect.value;
+  const priorityFilter = document.getElementById("task-filter-priority").value;
+  let tasks = db.tasks.filter(t=>{
+    if(assigneeFilter!=="all"){
+      if(assigneeFilter==="unassigned" && t.assigneeEmail) return false;
+      if(assigneeFilter!=="unassigned" && t.assigneeEmail!==assigneeFilter) return false;
+    }
+    if(priorityFilter!=="all" && t.priority!==priorityFilter) return false;
+    return true;
+  });
+  const priorityRank = {high:0, medium:1, low:2};
+  const cols = {todo:[], in_progress:[], done:[]};
+  tasks.forEach(t=> (cols[t.status]||cols.todo).push(t));
+  Object.values(cols).forEach(list=> list.sort((a,b)=> priorityRank[a.priority]-priorityRank[b.priority]));
+
+  const nextStatus = { todo:"in_progress", in_progress:"done", done:null };
+  const nextLabel = { todo:"Start →", in_progress:"Mark done →", done:null };
+  const prevStatus = { todo:null, in_progress:"todo", done:"in_progress" };
+
+  Object.keys(cols).forEach(status=>{
+    document.getElementById("count-"+status).textContent = cols[status].length;
+    document.getElementById("col-"+status).innerHTML = cols[status].map(t=>{
+      const overdue = t.dueDate && t.status!=="done" && new Date(t.dueDate) < TODAY;
+      return '<div class="task-card">'
+        + '<div class="task-title">'+t.title+'</div>'
+        + (t.description ? '<div class="task-desc">'+t.description+'</div>' : '')
+        + '<div class="task-meta"><span class="task-priority '+t.priority+'">'+t.priority+'</span><span class="task-assignee">'+taskAssigneeName(t.assigneeEmail)+'</span></div>'
+        + (t.dueDate ? '<div class="task-due'+(overdue?" overdue":"")+'">'+(overdue?"Overdue — ":"Due ")+t.dueDate+'</div>' : "")
+        + '<div class="task-card-actions" style="margin-top:8px;">'
+          + (prevStatus[status] ? '<button onclick="app.moveTask(\''+t.id+'\',\''+prevStatus[status]+'\')">← Back</button>' : '')
+          + (nextStatus[status] ? '<button onclick="app.moveTask(\''+t.id+'\',\''+nextStatus[status]+'\')">'+nextLabel[status]+'</button>' : '')
+          + '<button onclick="app.openTaskModal(\''+t.id+'\')">Edit</button>'
+          + '<button onclick="app.deleteTask(\''+t.id+'\')">Delete</button>'
+        + '</div>'
+      + '</div>';
+    }).join("") || '<div class="empty-note">No tasks here.</div>';
+  });
+}
+
 async function saveTeamMember(){
   const id = document.getElementById("team-id").value;
   const name = document.getElementById("team-name").value.trim();
@@ -2980,8 +3219,9 @@ async function pushToSupabase(){
     await supa.from("products").upsert(db.products.map(p=>({id:p.sku, sku:p.sku, name:p.name, category:p.category, cost:p.cost, price:p.price, stock:p.stock, photo:p.photo||null, gst:productGSTRate(p), expiry:p.expiry||null})));
     await supa.from("customers").upsert(db.customers.map(c=>({id:c.id, name:c.name, email:c.email, phone:c.phone, address:c.address||null})));
     await supa.from("orders").upsert(db.orders.map(o=>({id:o.id, customer_id:o.customerId, date:o.date, items:o.items, status:o.status, supply_type:o.supplyType||"intra"})));
+    if(db.tasks && db.tasks.length) await supa.from("tasks").upsert(db.tasks.map(t=>({id:t.id, title:t.title, description:t.description||null, assignee_email:t.assigneeEmail||null, created_by:t.createdBy||null, priority:t.priority, status:t.status, due_date:t.dueDate||null})));
     await pushSettingsToSupabase();
-    alert("Pushed products, customers, orders and settings to Supabase.");
+    alert("Pushed products, customers, orders, tasks and settings to Supabase.");
   } catch(e){ alert("Push failed: "+e.message+"\\n\\nCheck that the tables from supabase-schema.sql exist in your project."); }
 }
 async function pushSettingsToSupabase(){
@@ -3002,8 +3242,8 @@ for(let i=1;i<=20;i++){ LEGACY_PID_MAP["p"+i] = "LRK-"+(100+i); }
 async function pullFromSupabase(silent){
   if(!supa){ if(!silent) alert("Connect to Supabase first (Save & connect above)."); return; }
   try{
-    const [{data:products,error:e1}, {data:customers,error:e2}, {data:orders,error:e3}, settingsResult, teamResult] = await Promise.all([
-      supa.from("products").select("*"), supa.from("customers").select("*"), supa.from("orders").select("*"), supa.from("app_settings").select("*"), supa.from("team_members").select("*")
+    const [{data:products,error:e1}, {data:customers,error:e2}, {data:orders,error:e3}, settingsResult, teamResult, tasksResult] = await Promise.all([
+      supa.from("products").select("*"), supa.from("customers").select("*"), supa.from("orders").select("*"), supa.from("app_settings").select("*"), supa.from("team_members").select("*"), supa.from("tasks").select("*")
     ]);
     if(e1||e2||e3) throw (e1||e2||e3);
     if(products && products.length) db.products = products.map(p=>({id:p.sku||p.id, sku:p.sku, name:p.name, category:p.category, cost:p.cost, price:p.price, stock:p.stock, photo:p.photo||"", gst: p.gst!==undefined&&p.gst!==null ? p.gst : (db.settings.defaultGst||5), expiry:p.expiry||null}));
@@ -3013,6 +3253,7 @@ async function pullFromSupabase(silent){
       db.settings = Object.assign({}, db.settings, settingsResult.data[0].data, { sbUrl: db.settings.sbUrl, sbKey: db.settings.sbKey });
     }
     if(!teamResult.error && teamResult.data) db.team = teamResult.data.map(t=>({id:t.id, name:t.name, email:t.email, role:t.role, permissions:t.permissions||null}));
+    if(!tasksResult.error && tasksResult.data) db.tasks = tasksResult.data.map(t=>({id:t.id, title:t.title, description:t.description||"", assigneeEmail:t.assignee_email||null, createdBy:t.created_by||null, priority:t.priority||"medium", status:t.status||"todo", dueDate:t.due_date||null}));
     saveDB();
     await repairLegacyOrderItems();
     if(document.querySelector(".nav-item.active")) setView(document.querySelector(".nav-item.active").dataset.view);
@@ -3045,7 +3286,7 @@ async function repairLegacyOrderItems(){
 /* ---------------- Backups ---------------- */
 function buildSnapshot(){
   const { sbUrl, sbKey, ...settingsForBackup } = db.settings;
-  return { takenAt: new Date().toISOString(), products: db.products, customers: db.customers, orders: db.orders, team: db.team, settings: settingsForBackup };
+  return { takenAt: new Date().toISOString(), products: db.products, customers: db.customers, orders: db.orders, team: db.team, tasks: db.tasks, settings: settingsForBackup };
 }
 async function captureBackup(){
   const snapshot = buildSnapshot();
@@ -3093,14 +3334,17 @@ async function restoreFromSnapshot(snapshot){
     const productRows = snapshot.products.map(p=>({id:p.sku, sku:p.sku, name:p.name, category:p.category, cost:p.cost, price:p.price, stock:p.stock, photo:p.photo||null, gst:productGSTRate(p), expiry:p.expiry||null}));
     const customerRows = snapshot.customers.map(c=>({id:c.id, name:c.name, email:c.email, phone:c.phone, address:c.address||null}));
     const orderRows = snapshot.orders.map(o=>({id:o.id, customer_id:o.customerId, date:o.date, items:o.items, status:o.status, supply_type:o.supplyType||"intra"}));
+    const taskRows = (snapshot.tasks||[]).map(t=>({id:t.id, title:t.title, description:t.description||null, assignee_email:t.assigneeEmail||null, created_by:t.createdBy||null, priority:t.priority, status:t.status, due_date:t.dueDate||null}));
     await restoreTable("products", productRows);
     await restoreTable("customers", customerRows);
     await restoreTable("orders", orderRows);
+    await restoreTable("tasks", taskRows);
     if(snapshot.settings) await supa.from("app_settings").upsert({ id:"main", data: snapshot.settings, updated_by: currentUser?currentUser.email:null });
     await pullFromSupabase(true);
   } else {
     db.products = snapshot.products; db.customers = snapshot.customers; db.orders = snapshot.orders;
     if(snapshot.team) db.team = snapshot.team;
+    if(snapshot.tasks) db.tasks = snapshot.tasks;
     db.settings = Object.assign({}, db.settings, snapshot.settings, { sbUrl: db.settings.sbUrl, sbKey: db.settings.sbKey });
     saveDB();
     setView(document.querySelector(".nav-item.active")?.dataset.view || "dashboard");
@@ -3197,6 +3441,7 @@ window.app = {
   saveSettings, saveAppearance, resetAppearance, connectSupabase, pushToSupabase, pullFromSupabase,
   restoreBackupSlot, downloadBackupFile, restoreFromFile, closeFinancialYear,
   openTeamModal, saveTeamMember, deleteTeamMember, applyRolePresetToForm,
+  openTaskModal, saveTask, deleteTask, moveTask, renderTasks,
   authSignIn, authSignUp, authSignOut, authShowSignUp, authShowSignIn,
   clearAllData, closeModal
 };
